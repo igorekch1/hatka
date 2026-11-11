@@ -1,0 +1,15 @@
+services:
+  radar:
+    build: .
+    container_name: lviv-flats-radar
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /data/radar.db
+    volumes:
+      - ./data:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
