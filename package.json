@@ -1,0 +1,24 @@
+{
+  "name": "lviv-flats-radar",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Агрегатор новых объявлений об аренде квартир во Львове с мгновенными уведомлениями в Telegram",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/index.ts",
+    "dry": "DRY_RUN=1 node --env-file-if-exists=.env --disable-warning=ExperimentalWarning src/index.ts --once",
+    "tg-login": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/tg-login.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "telegram": "^2.26.22"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.8.0"
+  }
+}

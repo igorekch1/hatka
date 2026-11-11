@@ -1,0 +1,100 @@
+{
+  "cards": [
+    {
+      "id": 4731405563,
+      "groupId": "102113786667973433",
+      "urlRaw": "https://www.olx.ua/d/uk/obyavlenie/zdam-kvartiru-2km-zalznichniy-r-n-levandvka-ID11EtB0.html",
+      "insertTime": "2026-11-11T10:44:17",
+      "price": 20000,
+      "currency": "uah",
+      "roomCount": 2,
+      "areaTotal": 45,
+      "floor": 1,
+      "floorCount": 5,
+      "isOwner": true,
+      "header": "Здам квартиру 2км,Залізничний р-н Левандівка",
+      "text": "ЗДАЄТЬСЯ СВІТЛА ТА ЗАТИШНА 2-КІМНАТНА КВАРТИРА | ЛЬВІВ, ЛЕВАНДІВКА, вул. СІРКА",
+      "site": { "siteId": 20, "displayName": "olx.ua" },
+      "location": [23.968058642439622, 49.844292596500274],
+      "images": [{ "imageId": 1154811124 }],
+      "phones": null,
+      "geoEntities": [
+        { "type": "street", "name": "вулиця Івана Сірка" },
+        { "type": "city", "name": "Львів" },
+        { "type": "microdistrict", "name": "Левандівка" },
+        { "type": "district", "name": "Залізничний" }
+      ],
+      "rieltorContact": null,
+      "furniture": [{ "name": "Холодильник", "icon": "fridge" }],
+      "withoutCommission": true,
+      "petsAllowedFull": "no",
+      "houseData": { "kitchenStoveName": null, "parkingCount": null },
+      "shelter": null
+    },
+    {
+      "id": 4731405877,
+      "groupId": "102113786667731872",
+      "urlRaw": "https://rieltor.ua/lvov/flats-rent/view/13212728/",
+      "insertTime": "2026-11-11T10:29:26",
+      "price": 25000,
+      "currency": "uah",
+      "roomCount": 1,
+      "areaTotal": 45,
+      "floor": 17,
+      "floorCount": 17,
+      "isOwner": false,
+      "header": "Бігова вул., 17",
+      "text": "Оренда стильної 1-кімнатної квартири на вул. Бігова, 17. Євроремонт у світлих відтінках.",
+      "site": { "siteId": 23, "displayName": "rieltor.ua" },
+      "location": [24.09392547607422, 49.8433952331543],
+      "images": [{ "imageId": "offers/1881557251842882" }],
+      "phones": ["380981505588", "380677380101"],
+      "geoEntities": [
+        { "type": "residential_complex", "name": "ЖК Щасливий" },
+        { "type": "microdistrict", "name": "Кривчиці" },
+        { "type": "house", "name": "17" },
+        { "type": "street", "name": "Бігова вулиця" },
+        { "type": "district", "name": "Личаківський" }
+      ],
+      "furniture": [{ "name": "Пральна машина", "icon": "washer" }],
+      "withoutCommission": false,
+      "petsAllowedFull": "yes",
+      "houseData": { "kitchenStoveName": "gas", "parkingCount": null },
+      "shelter": ["underground_parking"]
+    },
+    {
+      "id": 4731499999,
+      "groupId": "102113786667799999",
+      "urlRaw": "https://rieltor.ua/lvov/flats-rent/view/13299999/",
+      "insertTime": "2026-11-11T10:50:00",
+      "price": 850,
+      "currency": "usd",
+      "roomCount": 2,
+      "areaTotal": 62,
+      "floor": 7,
+      "floorCount": 16,
+      "isOwner": false,
+      "header": "Героїв УПА вул., 73",
+      "text": "Оренда 2к квартири в ЖК Америка. Світла, дві кімнати, кухня-вітальня, кондиціонер у спальні, посудомийна машина, газова плита, душова кабіна. Можна з тваринами. Підземний паркінг за домовленістю.",
+      "site": { "siteId": 23, "displayName": "rieltor.ua" },
+      "location": [23.99, 49.82],
+      "images": [{ "imageId": "offers/1881557251999999" }],
+      "phones": ["380671234567"],
+      "geoEntities": [
+        { "type": "residential_complex", "name": "ЖК Америка" },
+        { "type": "street", "name": "вулиця Героїв УПА" },
+        { "type": "house", "name": "73" },
+        { "type": "district", "name": "Франківський" }
+      ],
+      "furniture": [
+        { "name": "Кондиціонер", "icon": "air-conditioning" },
+        { "name": "Посудомийна машина", "icon": "dishwasher" },
+        { "name": "Душова кабіна", "icon": "shower" }
+      ],
+      "withoutCommission": false,
+      "petsAllowedFull": "yes",
+      "houseData": { "kitchenStoveName": "gas", "parkingCount": null },
+      "shelter": ["underground_parking"]
+    }
+  ]
+}
