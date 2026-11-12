@@ -68,7 +68,7 @@ export function mapTelegramPost(p: {
 const pkg = (name: string) => name; // динамический импорт: пакет нужен только если включён Telegram-источник
 
 /** gramjs — CommonJS-пакет; подтягиваем классы так, чтобы работало при любом способе экспорта */
-export async function loadGramJs(): Promise<{ TelegramClient: any; StringSession: any; NewMessage: any }> {
+export async function loadGramJs(): Promise<{ TelegramClient: any; StringSession: any; NewMessage: any; Api: any }> {
   const main: any = await import(pkg('telegram'));
   const root = main.default ?? main;
   const sessions: any = root.sessions ?? (await import(pkg('telegram/sessions/index.js')));
@@ -77,17 +77,29 @@ export async function loadGramJs(): Promise<{ TelegramClient: any; StringSession
     TelegramClient: root.TelegramClient ?? main.TelegramClient,
     StringSession: (sessions.default ?? sessions).StringSession,
     NewMessage: (events.default ?? events).NewMessage,
+    Api: root.Api ?? main.Api,
   };
 }
 
-export async function startTelegramSource(onListing: (l: Listing) => Promise<void>): Promise<() => Promise<void>> {
+export type TelegramStart = {
+  stop: () => Promise<void>;
+  /** Названия каналов, которые реально слушаем */
+  listening: string[];
+  /** Каналы из TG_CHANNELS, которые не нашлись */
+  missing: string[];
+  /** Почему каналы не запущены вообще (не настроено) */
+  skipped?: string;
+};
+
+export async function startTelegramSource(onListing: (l: Listing) => Promise<void>): Promise<TelegramStart> {
+  const noop = async () => {};
   if (!CONFIG.tgApiId || !CONFIG.tgApiHash || !CONFIG.tgSession) {
     log('Telegram-каналы: не настроены TG_API_ID / TG_API_HASH / TG_SESSION — пропускаю');
-    return async () => {};
+    return { stop: noop, listening: [], missing: [], skipped: 'не задані TG_API_ID / TG_API_HASH / TG_SESSION' };
   }
   if (CONFIG.tgChannels.length === 0) {
     log('Telegram-каналы: список TG_CHANNELS пуст — пропускаю');
-    return async () => {};
+    return { stop: noop, listening: [], missing: [], skipped: 'порожній TG_CHANNELS' };
   }
 
   const { TelegramClient, StringSession, NewMessage } = await loadGramJs();
@@ -101,14 +113,18 @@ export async function startTelegramSource(onListing: (l: Listing) => Promise<voi
 
   const meta = new Map<string, { username?: string; title?: string; key: string }>();
   const chatIds: any[] = [];
+  const listening: string[] = [];
+  const missing: string[] = [];
   for (const ch of CONFIG.tgChannels) {
     try {
       const entity = await client.getEntity(ch);
       const key = entity.username ?? String(entity.id);
       meta.set(String(entity.id), { username: entity.username, title: entity.title, key });
       chatIds.push(entity.id);
+      listening.push(entity.title ?? ch);
       log(`Telegram: слушаю «${entity.title ?? ch}»`);
     } catch (e) {
+      missing.push(ch);
       log(`Telegram: не нашёл канал ${ch} (вы в нём состоите? правильный @username?)`, String(e));
     }
   }
@@ -132,7 +148,11 @@ export async function startTelegramSource(onListing: (l: Listing) => Promise<voi
     }
   }, new NewMessage({ chats: chatIds }));
 
-  return async () => {
-    await client.disconnect();
+  return {
+    stop: async () => {
+      await client.disconnect();
+    },
+    listening,
+    missing,
   };
 }

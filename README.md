@@ -1,21 +1,43 @@
-# 🏠 Радар квартир во Львове
+# 🏠 Hatka — rental radar for Lviv
 
-Следит за новыми объявлениями о долгосрочной аренде во Львове и **за минуту** присылает подходящие в общую Telegram-группу.
+A Telegram bot that watches every major Ukrainian rental marketplace and a set of Telegram channels, picks out the
+long-term apartment listings in Lviv that match your criteria, and posts them to a shared group chat **within about a
+minute of publication** — then helps the people in that group coordinate who calls, what they liked and when the
+viewings are.
 
-**Источники:** OLX · Lun.ua (сам агрегирует rieltor.ua, OLX, DIM.RIA) · DIM.RIA · Telegram-каналы
-**Фильтры** задаются прямо в боте обычным текстом. Стандартных нет: пока фильтры не заданы, бот ничего не присылает.
+> *Hatka* (хатка) is Ukrainian for "little house".
 
-```
-сайты ─┐ каждые ~60 с                                    ┌─ 🏠 карточка + фото
-       ├─► дубли? ─► жёсткий фильтр ─► ИИ-разбор ─► оценка ─┤   ❤️ 📞 📅 🚫 ❌ статусы
-TG ────┘ мгновенно                                        └─ Telegram-группа
-```
+## The problem
 
----
+Renting in Lviv is a race. Good apartments are gone within hours, and they are spread across OLX, DIM.RIA,
+Rieltor/Lun and dozens of Telegram channels — each with its own filters (or none), duplicates of the same flat posted by
+several realtors, and important details (pets allowed? gas stove? underground parking?) buried in free text.
+Searching together with someone else adds another layer: who already called this one, which ones did we both like,
+when is the viewing?
 
-## Как выглядит уведомление
+## What the bot does
 
-Бот целиком на украинском:
+- **Aggregates** OLX, DIM.RIA, Lun.ua (which itself mirrors Rieltor, OLX and DIM.RIA) and any Telegram channels you
+  are subscribed to — sites are polled every ~60 s, channels arrive instantly as push events.
+- **Deduplicates** the same flat across sites and realtors (source URL, phone + area, address, district + area + price).
+- **Filters** by price, district, rooms, area, pets and red flags ("daily rent", "for one person only", sales, room shares).
+- **Understands free text with an LLM** (Claude Haiku): extracts price, district (from street or residential complex),
+  pets policy, amenities and red flags, and checks custom requirements like "not the ground floor".
+- **Scores** each flat 0–10 against your weighted wish list and marks the best ones as **🔥 TOP**.
+- **Posts a rich card** linking to the *original* listing (not the aggregator), with a Google Maps link and a list of what
+  is present and what still needs to be asked on the phone.
+- **Turns the group chat into a lightweight CRM**: ❤️ like, 📞 "I'm calling", 📅 viewing scheduled (with a date parsed from
+  "tomorrow at 6 pm"), 🚫 rejected, ❌ not suitable; lists of liked flats, top flats and upcoming viewings.
+- **Is configured in plain language**: `/filters до 900$, Галицький або Франківський, 2 кімнати, обов'язково посудомийка`
+  ("up to $900, Halytskyi or Frankivskyi, 2 rooms, a dishwasher is a must") — the LLM turns it into structured filters,
+  shows the diff and offers an undo.
+- **Answers questions about itself**: `/help як підняти мін. поріг до 3?` ("how do I raise the minimum score to 3?") is
+  answered by Claude from a built-in manual.
+- **Tracks flats found manually**: `/add <link>` builds the same card from any listing URL.
+
+## What a card looks like
+
+The bot talks Ukrainian to its users:
 
 ```
 🔥 ТОП 8.6/10
@@ -38,130 +60,94 @@ TG ────┘ мгновенно                                        └
 [🚫 Відмовили] [❌ Не підходить]
 ```
 
-- **🔥 ТОП** — шапка у карточек с оценкой 7+ (как считается оценка — ниже). Все топовые за 30 дней — `/top`.
-- **✅ / ❌** — какие «хотелки» из фильтров есть, а каких нет или о них не сказано (что уточнить при звонке).
-- **На карті** — Google Maps по координатам или адресу; если известен только район, ссылки нет.
-- Ссылка всегда ведёт на **первоисточник**: если объявление найдено через Lun, а выложено на Rieltor/OLX — кнопка «Відкрити на Rieltor/OLX».
-- **❤️ Подобається** — отметка от каждого, кто нажал (можно нескольким). Повторное нажатие снимает.
-- **📞 Дзвоню я** — «Дзвонить: Андрій», второй человек не сможет перехватить.
-- **📅 Записались на перегляд** — бот спросит «Коли перегляд?»; ответьте *на его сообщение* (reply): «завтра о 18:00», «пт 12:30», «14.11 18:00», «-» если пока неизвестно. Нажать ещё раз — поменять дату или ответить «скасувати», чтобы снять запись.
-- **🚫 Відмовили** / **❌ Не підходить** — тоже переключатели.
+## How it works
 
-**Меню и команды:** `/menu` — кнопки: фильтры, топ, «сподобались», перегляди, добавить свою, стан, пауза.
-`/filters` · `/top` · `/liked` · `/viewings` · `/add` · `/status` · `/pause` · `/resume` · `/help` · `/chatid`
-
-**`/help`** — спросить о боте обычными словами («як підняти мін. поріг до 3?»): отвечает Claude по встроенной инструкции (`MANUAL` в `src/help.ts`) и текущим фильтрам. Без ключа Anthropic — короткая справка.
-
-### Своя квартира: `/add`
-Нашли квартиру сами — `/add <ссылка>` (или «➕ Додати свою квартиру» в меню). Бот соберёт карточку и сразу поставит «❤️ Подобається» от того, кто добавил; фильтры не применяются. После ссылки можно дописать заметку — `/add https://… 2к, $800, Франківський` — пригодится, если сайт не отдаст данные (OLX часто режет такие запросы). Если квартира уже есть в чате, бот не дублирует карточку, а ставит лайк на существующую.
-
-### Оценка 0–10
-Сколько «хотелок» из фильтров **подтверждено** в объявлении: каждая даёт свой вес (подземный паркинг 2, посудомойка 1.5, кондиционер в спальне 1.5, газ/душ/2 стола по 1, светлая 0.5), плюс 0.5 за «не всё белое» и 1.5 за ЖК мечты; итог — доля от максимума × 10. О чём не сказано — 0 баллов, без штрафа. Цена, район и собака на оценку не влияют — это фильтры.
-
-### Фильтры из бота
-`/filters` показывает текущие фильтры, кнопка **✏️ Змінити** просит прислать новые — *ответом на сообщение бота*, списком или текстом:
-
-> до 900$, Франківський або Галицький, 2 кімнати від 50 м², обов'язково посудомийка і паркінг, не перший поверх
-
-или точечно: «підніми бюджет до 1100», «додай Личаківський». Можно и сразу: `/filters до 900$, Галицький`.
-Текст разбирает Claude: цена (гривны пересчитываются), районы, комнаты, площадь, собака, ЖК мечты, «хотелки» с весами, мин. оценка; всё остальное («не перший поверх», «з балконом») уходит в «додаткові вимоги» — их ИИ проверяет у каждого объявления. Без `ANTHROPIC_API_KEY` понимается только цена, районы, комнаты, площадь и оценка.
-После изменения есть кнопка **↩️ Скасувати зміни**, а **🗑 Очистити** стирает фильтры. Фильтры хранятся в базе и переживают перезапуск; действуют для новых объявлений.
-
-**Стандартных фильтров нет.** При первом запуске (и после «Очистити») бот ничего не присылает и пишет в группу «Фільтри ще не задані» — достаточно ответить на это сообщение текстом фильтров, и поиск начнётся сам. Чего не указали — без ограничений (не указали цену — любая, районы — все).
-
-> В группе бот по умолчанию видит только команды и ответы на свои сообщения — поэтому фильтры и дату просмотра присылайте именно reply'ем.
-
----
-
-## Установка (≈30 минут, один раз)
-
-### 1. Бот и группа
-1. В Telegram открой **@BotFather** → `/newbot` → придумай имя → получишь **токен**.
-2. Создай группу (например, «Квартира Львів»), добавь туда всех, кто ищет квартиру, и своего бота.
-
-### 2. Ключ для ИИ (рекомендуется)
-[console.anthropic.com](https://console.anthropic.com) → **API Keys** → Create Key. Пополни баланс на $5 — этого хватит на месяц+.
-Без ключа радар тоже работает, но хуже понимает тексты (собака, техника, район в телеграм-постах).
-
-### 3. Сервер
-Любой самый маленький VPS: **Hetzner Cloud** (CX22 или аналог, Ubuntu 24.04), DigitalOcean, и т.п.
-
-```bash
-ssh root@IP_СЕРВЕРА
-curl -fsSL https://get.docker.com | sh          # ставим Docker
+```
+OLX, DIM.RIA, Lun ──┐ polled every ~60 s
+                    ├──► normalized Listing ──► dedup ──► age check ──► hard filters ──► LLM parsing ──► score ──► card
+Telegram channels ──┘ pushed instantly (MTProto)                                                                │
+                                                                                                                ▼
+                                       likes · calls · viewings · /top · /liked · /viewings  ◄── Telegram group (Bot API)
 ```
 
-Со своего компьютера закинь папку проекта на сервер:
-```bash
-scp -r lviv-flats root@IP_СЕРВЕРА:/root/
-```
+Details: [docs/architecture.md](docs/architecture.md).
 
-### 4. Настройка и запуск
-```bash
-cd /root/lviv-flats
-cp .env.example .env
-nano .env               # вписать TELEGRAM_BOT_TOKEN и ANTHROPIC_API_KEY
-docker compose up -d --build
-```
+## Engineering highlights
 
-Теперь узнай id группы: напиши в группе **`/chatid`** — бот ответит числом вида `-1001234567890`.
-Впиши его в `.env` как `TELEGRAM_CHAT_ID` и перезапусти:
-```bash
-docker compose up -d
-```
-В группе появится «🟢 Радар квартир запущено» и сообщение «Фільтри ще не задані» — ответь на него (reply) текстом фильтров, и поиск начнётся. Готово.
+- **Zero-framework, two runtime dependencies.** HTTP, SQLite (`node:sqlite`), the Telegram Bot API and the Anthropic API
+  are all used through Node 22 built-ins; TypeScript runs natively via Node's type stripping — no build step.
+  The only packages are `telegram` (gramjs, MTProto client for reading channels) and `qrcode-terminal` (QR login).
+- **Sequential processing pipeline** — every listing passes through a single queue, so cross-source deduplication never races.
+- **Cheap checks before expensive ones** — dedup, age and hard filters run before the LLM call; the model only sees
+  listings that can still match. Without an API key the bot degrades to keyword parsing instead of failing.
+- **"Miss nothing" bias** — uncertain data (unknown district, pets not mentioned) is let through and flagged ⚠️ rather than dropped.
+- **Natural-language configuration with guardrails** — LLM output is validated and clamped (`sanitizeFilters`),
+  unknown values are dropped, every change shows a diff and can be undone.
+- **Stateless UI on top of chat** — conversational steps (filters, viewing date, `/add`) use `force_reply` prompts tracked in
+  SQLite, which works with the bot's group privacy mode on.
+- **Time zone–correct date parsing** for viewings ("пт 12:30", "15 листопада о 10") in Europe/Kyiv regardless of the server's zone.
+- **Tests on real data** — `node:test` suite including a replay of real OLX and Lun listings captured on 11.11.2026.
 
-### 5. Telegram-каналы (по желанию, но очень полезно)
-Каналы читаются от имени **твоего** аккаунта (обычный бот чужие каналы читать не может).
+## Tech stack
 
-1. [my.telegram.org](https://my.telegram.org) → **API development tools** → создай приложение → получишь `api_id` и `api_hash`. Впиши в `.env`.
-2. Создай сессию прямо на сервере:
-   ```bash
-   docker compose run --rm -it radar node --disable-warning=ExperimentalWarning scripts/tg-login.ts
-   ```
-   Введи телефон и код из Telegram. Скопируй строку `TG_SESSION=...` в `.env`.
-3. В `TG_CHANNELS` перечисли каналы через запятую (`@username` или ссылки), ты должен в них состоять.
-4. `docker compose up -d`
+TypeScript · Node.js 22 · SQLite (`node:sqlite`) · Telegram Bot API · MTProto (gramjs) · Anthropic Claude API ·
+Docker / Docker Compose · `node:test`
 
-> ⚠️ `TG_SESSION` — это полный доступ к аккаунту. Храни только в `.env` на сервере. Отозвать: Telegram → Настройки → Устройства → завершить сеанс «lviv-flats-radar».
-
----
-
-## Полезное
-
-| Что | Команда |
-|---|---|
-| Логи в реальном времени | `docker compose logs -f` |
-| Перезапуск после правки `.env` или фильтров | `docker compose up -d --build` |
-| Остановить | `docker compose down` |
-| Пробный прогон без отправки в Telegram | `docker compose run --rm -e DRY_RUN=1 radar node --disable-warning=ExperimentalWarning src/index.ts --once` |
-
-**Поменять фильтры** — из бота (`/filters`).
-
-## Как это устроено
-
-- **OLX** — внутренний JSON сайта (категория «Довгострокова оренда квартир», Львів). Телефон OLX показывает только залогиненным — в карточке будет ссылка.
-- **Lun.ua** — API самого Lun: телефоны, «можна з тваринами», техника, «укриття в підземному паркінгу». Отстаёт от OLX на ~30 мин, поэтому OLX опрашивается и напрямую.
-- **DIM.RIA** — поиск по Львову + детали только для новых id.
-- **Telegram** — события в реальном времени, без опроса.
-- **Дубли** склеиваются по ссылке-первоисточнику, id группы Lun, телефону+площади, адресу и «район+площадь+цена». Если одну квартиру уже отсеяли (например, «только маленькие собаки» на OLX), её копия от другого риелтора тоже не придёт.
-- **Объявления старше 3 часов** не присылаются (OLX поднимает в топ старые объявления, а при первом запуске не будет потока).
-- **Сомнительное пропускается**: район не указан, про животных не сказано, «тварини до обговорення» — придёт с пометкой ⚠️. Лучше лишний звонок, чем упущенная квартира.
-- Если источник падает 5 раз подряд, бот пишет в группу ⚠️ (сайт мог заблокировать IP сервера или поменять формат).
-
-## Если что-то не так
-
-- **⚠️ «OLX/Lun не отвечает… блокирует запросы»** — сайт режет датацентровые IP. Варианты: другой хостер/регион, или запустить на домашнем Mac (`npm install && npm start`, Node ≥ 22.18).
-- **Приходит слишком много** — `/filters мін. оцінка 3`.
-- **Приходит мало** — проверь `/status`: там топ причин отсева за сутки.
-
-## Разработка
+## Quick start
 
 ```bash
+git clone https://github.com/igorekch1/hatka.git && cd hatka
 npm install
-npm test          # тесты, включая прогон на реальных объявлениях от 11.11.2026
-npm run typecheck
-npm run dry       # один опрос всех сайтов, результат в консоль
+cp .env.example .env   # add TELEGRAM_BOT_TOKEN (and ideally ANTHROPIC_API_KEY)
+npm start              # then write /chatid in your group, put it into .env, restart
 ```
 
-Только одна зависимость в рантайме — `telegram` (gramjs) для чтения каналов. HTTP, SQLite (`node:sqlite`), Telegram Bot API и Anthropic API — на встроенных средствах Node 22.
+On first start the bot asks for filters — reply to its message with what you are looking for, and the search begins.
+
+## Documentation
+
+| | |
+|---|---|
+| [docs/usage.md](docs/usage.md) | Commands, card buttons, filters, scoring, `/add`, `/help` |
+| [docs/setup.md](docs/setup.md) | Telegram bot and group, Anthropic key, Telegram channels, running locally |
+| [docs/deployment.md](docs/deployment.md) | Step-by-step deployment to a VPS with Docker, operations and troubleshooting |
+| [docs/configuration.md](docs/configuration.md) | Environment variables and the filter model |
+| [docs/architecture.md](docs/architecture.md) | Sources, pipeline, deduplication, LLM parsing, scoring, storage |
+
+## Development
+
+```bash
+npm test          # unit tests + replay of real listings
+npm run typecheck
+npm run dry       # poll all sources once and print results, nothing is sent to Telegram
+```
+
+## Project structure
+
+```
+src/
+  index.ts        entry point: polling loops, commands, menu
+  pipeline.ts     dedup → filters → LLM → score → send
+  sources/        olx, lun, domria (HTTP polling), telegram (MTProto push)
+  filter.ts       hard filters, keyword features, scoring
+  filters.ts      user filters: natural-language parsing, validation, persistence
+  ai.ts           Claude API: listing analysis
+  bot.ts          Telegram Bot API: cards, buttons, reply prompts
+  render.ts       card and list rendering
+  manual.ts       /add — cards from arbitrary listing URLs
+  help.ts         /help — answers from the built-in manual
+  when.ts         viewing date parsing (Europe/Kyiv)
+  db.ts           SQLite storage
+scripts/tg-login.ts  one-time Telegram login (QR or code) for reading channels
+test/             node:test suites and real-data fixtures
+```
+
+## Status and limitations
+
+A personal project, built for and used during an actual apartment search in Lviv.
+
+- OLX currently blocks non-browser clients (HTTP 403 even from residential networks); OLX listings still arrive through Lun
+  with a ~30-minute delay, so `olx` is disabled in the default `SOURCES`.
+- Only new Telegram posts are seen — channel history is not read.
+- The bot's UI language is Ukrainian. Filters and `/help` questions are understood by the LLM in any language; the offline
+  fallback parser (used without an API key) understands Ukrainian and Russian only.

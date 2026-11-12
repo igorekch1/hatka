@@ -233,16 +233,24 @@ async function main() {
   void bot.listen(onCommand);
 
   let stopTelegram = async () => {};
+  let tgLine = '';
   if (CONFIG.sources.includes('telegram')) {
-    stopTelegram = await startTelegramSource((l) => pipeline.enqueue(l)).catch((e) => {
+    const tg = await startTelegramSource((l) => pipeline.enqueue(l)).catch((e) => {
       log('Telegram-каналы не запустились:', String(e));
-      void bot.sendText(`⚠️ Telegram-канали не підключились: <code>${escapeHtml(String(e).slice(0, 200))}</code>`).catch(() => {});
-      return async () => {};
+      return { stop: async () => {}, listening: [], missing: [], skipped: `помилка: ${String(e).slice(0, 200)}` };
     });
+    stopTelegram = tg.stop;
+    tgLine = tg.skipped
+      ? `\n⚠️ Telegram-канали не підключені — ${escapeHtml(tg.skipped)}`
+      : [
+          tg.listening.length ? `\n📣 Telegram-канали (${tg.listening.length}): ${tg.listening.map((t) => `«${escapeHtml(t)}»`).join(', ')}` : '',
+          tg.missing.length ? `\n⚠️ Не знайшов канали: ${escapeHtml(tg.missing.join(', '))} — перевірте @username і що ви в них підписані` : '',
+        ].join('');
   }
+  const sites = CONFIG.sources.filter((s) => s !== 'telegram');
 
   await bot
-    .sendText(`🟢 Радар квартир запущено. Стежу: ${CONFIG.sources.join(', ')}. Меню — /menu`)
+    .sendText(`🟢 Радар квартир запущено.\n🌐 Сайти: ${sites.join(', ') || '—'}${tgLine}\nМеню — /menu`)
     .catch((e) => log('Не смог написать в чат — проверьте TELEGRAM_CHAT_ID и что бот добавлен в группу:', String(e)));
   if (!FILTERS_STATE.configured)
     await bot.reply(String(CONFIG.chatId), { text: ONBOARDING, ask: 'filters' }).catch((e) => log('Не смог отправить приглашение задать фильтры', String(e)));
