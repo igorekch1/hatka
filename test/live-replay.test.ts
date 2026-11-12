@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { useSampleFilters } from './profile.ts';
 import { Store } from '../src/db.ts';
 import { Pipeline } from '../src/pipeline.ts';
 import { mapLunCard } from '../src/sources/lun.ts';
 import { mapOlxAd } from '../src/sources/olx.ts';
 import type { Listing } from '../src/types.ts';
+
+useSampleFilters();
 
 // Реальные объявления, снятые с OLX и Lun 11.11.2026 (без ИИ-разбора)
 const load = (f: string) => JSON.parse(readFileSync(new URL(`./fixtures/live/${f}`, import.meta.url), 'utf8'));

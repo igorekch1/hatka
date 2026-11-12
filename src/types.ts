@@ -1,4 +1,5 @@
-export type SourceName = 'olx' | 'lun' | 'domria' | 'telegram';
+/** manual — квартиру добавили руками через /add */
+export type SourceName = 'olx' | 'lun' | 'domria' | 'telegram' | 'manual';
 
 /**
  * Политика по животным, сведённая к тому, что важно для собаки среднего размера:

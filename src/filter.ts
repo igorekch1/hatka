@@ -119,8 +119,10 @@ export function isDreamComplex(l: Listing): boolean {
 export function score(l: Listing): number {
   const w = FILTERS.wishes;
   const dream = FILTERS.dreamComplexes.length ? DREAM_COMPLEX_BONUS : 0;
-  const total = Object.values(w).reduce((a, b) => a + (b ?? 0), 0) + NOT_ALL_WHITE_WEIGHT + dream;
-  if (total <= 0) return 0;
+  const wishSum = Object.values(w).reduce((a, b) => a + (b ?? 0), 0);
+  // Нет «хотелок» и ЖК мечты — оценивать не по чему
+  if (wishSum + dream <= 0) return 0;
+  const total = wishSum + NOT_ALL_WHITE_WEIGHT + dream;
   let got = 0;
   for (const [k, v] of Object.entries(w) as Array<[FeatureKey, number]>) {
     if (l.features[k] === true) got += v;

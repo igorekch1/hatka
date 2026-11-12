@@ -1,5 +1,5 @@
 import { aiEnabled, callClaude, extractJson } from './ai.ts';
-import { ALL_DISTRICTS, DEFAULT_FILTERS, FEATURE_LABELS, FILTERS, type Filters } from './config.ts';
+import { ALL_DISTRICTS, EMPTY_FILTERS, FEATURE_LABELS, FILTERS, FILTERS_STATE, NO_PRICE_LIMIT, type Filters } from './config.ts';
 import type { Store } from './db.ts';
 import { toUah, toUsd, uahPerUsdRate } from './fx.ts';
 import type { FeatureKey } from './types.ts';
@@ -20,14 +20,15 @@ const posOrNull = (v: unknown, d: number | null) =>
   v === null ? null : typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : d;
 
 /** Приводит что угодно (ответ ИИ, JSON из базы) к корректным фильтрам; чего нет — берёт из base */
-export function sanitizeFilters(raw: any, base: Filters = DEFAULT_FILTERS): Filters {
+export function sanitizeFilters(raw: any, base: Filters = EMPTY_FILTERS): Filters {
   const r = raw && typeof raw === 'object' ? raw : {};
   const out = clone(base);
-  out.maxPriceUsd = numOr(r.maxPriceUsd, base.maxPriceUsd, 50, 100_000);
+  out.maxPriceUsd = r.maxPriceUsd === null ? NO_PRICE_LIMIT : numOr(r.maxPriceUsd, base.maxPriceUsd, 50, NO_PRICE_LIMIT);
   out.minPriceUsd = numOr(r.minPriceUsd, base.minPriceUsd, 0, out.maxPriceUsd);
   if (Array.isArray(r.districts)) {
     const d = [...new Set(r.districts.map((x: unknown) => normalizeDistrict(String(x))).filter(Boolean))] as string[];
-    out.districts = d.length ? d : [...ALL_DISTRICTS];
+    // Ни одного известного района (опечатка, «Марс») — оставляем прежние, а не «все»
+    out.districts = d.length ? d : base.districts;
   }
   if (typeof r.allowUnknownDistrict === 'boolean') out.allowUnknownDistrict = r.allowUnknownDistrict;
   if ('minRooms' in r) out.minRooms = posOrNull(r.minRooms, base.minRooms);
@@ -60,16 +61,34 @@ export function sanitizeFilters(raw: any, base: Filters = DEFAULT_FILTERS): Filt
 /** Меняет фильтры на месте (их читают фильтр, оценка и промпт ИИ) и сохраняет в базу */
 export function applyFilters(store: Store, f: Filters) {
   Object.assign(FILTERS, clone(f));
+  FILTERS_STATE.configured = true;
   store.setKv('filters', JSON.stringify(FILTERS));
+}
+
+/** Стирает фильтры: бот перестаёт присылать объявления, пока их снова не зададут */
+export function clearFilters(store: Store) {
+  Object.assign(FILTERS, clone(EMPTY_FILTERS));
+  FILTERS_STATE.configured = false;
+  store.delKv('filters');
+}
+
+/** Снимок для «↩️ Скасувати»: JSON фильтров или "null", если их не было */
+export const filtersSnapshot = () => (FILTERS_STATE.configured ? JSON.stringify(FILTERS) : 'null');
+
+export function restoreSnapshot(store: Store, snap: string) {
+  const v = JSON.parse(snap);
+  if (v === null) clearFilters(store);
+  else applyFilters(store, sanitizeFilters(v, EMPTY_FILTERS));
 }
 
 export function loadFilters(store: Store) {
   const raw = store.getKv('filters');
   if (!raw) return;
   try {
-    Object.assign(FILTERS, sanitizeFilters(JSON.parse(raw), DEFAULT_FILTERS));
+    Object.assign(FILTERS, sanitizeFilters(JSON.parse(raw), EMPTY_FILTERS));
+    FILTERS_STATE.configured = true;
   } catch (err) {
-    log('Не удалось прочитать сохранённые фильтры, беру стандартные', String(err));
+    log('Не удалось прочитать сохранённые фильтры — считаю, что их нет', String(err));
   }
 }
 
@@ -78,13 +97,17 @@ const range = (a: number | null, b: number | null, unit = '') =>
   a && b ? (a === b ? `${a}${unit}` : `${a}–${b}${unit}`) : a ? `від ${a}${unit}` : b ? `до ${b}${unit}` : 'будь-яка';
 
 /** Человеческое описание фильтров (HTML) */
-export function describeFilters(f: Filters = FILTERS): string {
+export function describeFilters(f: Filters = FILTERS, configured = FILTERS_STATE.configured): string {
+  if (!configured)
+    return '⚙️ <b>Фільтри ще не задані</b> — тому я поки нічого не надсилаю.';
   const wishes = (Object.entries(f.wishes) as Array<[FeatureKey, number]>)
     .sort((a, b) => b[1] - a[1])
     .map(([k, w]) => `${FEATURE_LABELS[k]}${w >= 2 ? ' ‼️' : ''}`);
   const lines = [
     '⚙️ <b>Фільтри пошуку</b>',
-    `💵 Ціна: $${f.minPriceUsd}–${f.maxPriceUsd} (≈ ${toUah(f.maxPriceUsd).toLocaleString('uk-UA')} грн макс.)`,
+    f.maxPriceUsd >= NO_PRICE_LIMIT
+      ? `💵 Ціна: від $${f.minPriceUsd}, без верхньої межі`
+      : `💵 Ціна: $${f.minPriceUsd}–${f.maxPriceUsd} (≈ ${toUah(f.maxPriceUsd).toLocaleString('uk-UA')} грн макс.)`,
     `📍 Райони: ${e(f.districts.length === ALL_DISTRICTS.length ? 'всі' : f.districts.join(', '))}` +
       (f.allowUnknownDistrict ? ' · без вказаного району теж надсилати' : ''),
     `🚪 Кімнат: ${range(f.minRooms, f.maxRooms)} · 📐 Площа: ${f.minArea ? `від ${f.minArea} м²` : 'будь-яка'}`,
@@ -110,6 +133,7 @@ function filtersPrompt(): string {
 
 Правила:
 - Якщо користувач змінює лише щось одне («підніми бюджет до 1100») — решту залиш як є.
+- Чого користувач не згадав — лиши як у поточних. «Без обмеження ціни» = maxPriceUsd ${NO_PRICE_LIMIT}.
 - Якщо надіслав повний перелік вимог — побудуй фільтри заново з нього (чого не згадав — бери з поточних).
 - Ціни переводь у долари США. Курс: 1 USD = ${uahPerUsdRate().toFixed(2)} грн, 1 EUR ≈ 1.08 USD.
 - districts — лише з: ${ALL_DISTRICTS.join(', ')}. «Центр» = Галицький. «Будь-який район» = всі шість.

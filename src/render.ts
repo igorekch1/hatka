@@ -1,4 +1,4 @@
-import { FEATURE_LABELS } from './config.ts';
+import { FEATURE_LABELS, FILTERS, TOP_SCORE } from './config.ts';
 import type { MessageRow } from './db.ts';
 import { isDreamComplex } from './filter.ts';
 import { toUah } from './fx.ts';
@@ -14,18 +14,50 @@ const PETS_TEXT: Record<PetsPolicy, string> = {
   unknown: '🐕 Про тварин не сказано — уточнити ⚠️',
 };
 
-const SOURCE_NAME: Record<string, string> = { olx: 'OLX', lun: 'Lun', domria: 'DIM.RIA', telegram: 'Telegram' };
+const SOURCE_NAME: Record<string, string> = { olx: 'OLX', lun: 'Lun', domria: 'DIM.RIA', telegram: 'Telegram', manual: 'вручну' };
 
-/** Что важно уточнить при звонке, если в объявлении не сказано */
-const ASK_IF_UNKNOWN: FeatureKey[] = ['undergroundParking', 'dishwasher', 'acInBedroom', 'shower'];
-
+/** Что показываем в строке ✅ (если есть) */
 const SHOWN: FeatureKey[] = [
   'undergroundParking', 'parking', 'dishwasher', 'acInBedroom', 'airConditioner', 'gasStove', 'shower', 'twoDesks', 'bright',
 ];
 
+/** Ссылка на Google Maps: по координатам, иначе по адресу/ЖК. Только район — не показываем. */
+export function mapUrl(l: Listing): string | undefined {
+  if (l.lat && l.lon) return `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lon}`;
+  const q = [...new Set([l.address, l.complex].filter(Boolean))].join(', ');
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${q}, Львів`)}` : undefined;
+}
+
+/** ✅ что есть · ❌ каких «хотелок» из фильтров нет или не сказано */
+export function featureLines(l: Listing): string[] {
+  const f = l.features;
+  const yes: string[] = [];
+  for (const k of SHOWN) {
+    if (k === 'parking' && f.undergroundParking) continue;
+    if (k === 'airConditioner' && f.acInBedroom) continue;
+    if (f[k] === true) yes.push(FEATURE_LABELS[k]);
+  }
+  const no: string[] = [];
+  const unknown: string[] = [];
+  if (f.allWhiteInterior === true) no.push('інтер\'єр весь білий');
+  const wishes = (Object.entries(FILTERS.wishes) as Array<[FeatureKey, number]>).sort((a, b) => b[1] - a[1]);
+  for (const [k] of wishes) {
+    if (f[k] === true) continue;
+    if (k === 'parking' && f.undergroundParking) continue;
+    if (k === 'airConditioner' && f.acInBedroom) continue;
+    (f[k] === false ? no : unknown).push(FEATURE_LABELS[k]);
+  }
+  const out: string[] = [];
+  if (yes.length) out.push(`✅ ${e(yes.join(', '))}`);
+  if (no.length || unknown.length)
+    out.push(`❌ ${e([no.join(', '), unknown.length ? `не вказано: ${unknown.join(', ')}` : ''].filter(Boolean).join(' · '))}`);
+  return out;
+}
+
 /** «OLX · знайдено через Lun» — первоисточник первым; для Telegram — название канала */
 export function sourceLine(l: Listing): string {
   if (l.source === 'telegram') return `Telegram${l.origin ? ` (${l.origin})` : ''}`;
+  if (l.source === 'manual') return `${siteName(l.url) ?? 'посилання'} · додано вручну`;
   const site = siteName(l.url) ?? l.origin ?? SOURCE_NAME[l.source];
   return site === SOURCE_NAME[l.source] ? site : `${site} · знайдено через ${SOURCE_NAME[l.source]}`;
 }
@@ -33,6 +65,7 @@ export function sourceLine(l: Listing): string {
 export function renderListing(l: Listing, s: number, ai?: AiVerdict): string {
   const lines: string[] = [];
   const dream = isDreamComplex(l);
+  if (s >= TOP_SCORE) lines.push(`🔥 <b>ТОП ${s}/10</b>`);
 
   const head: string[] = [];
   if (l.rooms) head.push(`${l.rooms}к`);
@@ -44,24 +77,10 @@ export function renderListing(l: Listing, s: number, ai?: AiVerdict): string {
 
   const place = [l.district ?? 'район ?', l.complex, l.microdistrict, l.address].filter(Boolean) as string[];
   const floor = l.floor ? ` · ${l.floor}${l.floors ? '/' + l.floors : ''} пов.` : '';
-  lines.push(`📍 ${e([...new Set(place)].join(' · '))}${e(floor)}`);
+  const map = mapUrl(l);
+  lines.push(`📍 ${e([...new Set(place)].join(' · '))}${e(floor)}${map ? ` · <a href="${e(map)}">На карті</a>` : ''}`);
   lines.push(PETS_TEXT[l.pets]);
-
-  const yes: string[] = [];
-  const no: string[] = [];
-  const unknown: string[] = [];
-  for (const k of SHOWN) {
-    if (k === 'parking' && l.features.undergroundParking) continue;
-    if (k === 'airConditioner' && l.features.acInBedroom) continue;
-    const v = l.features[k];
-    if (v === true) yes.push(FEATURE_LABELS[k]);
-    else if (v === false) no.push(FEATURE_LABELS[k]);
-    else if (ASK_IF_UNKNOWN.includes(k)) unknown.push(FEATURE_LABELS[k]);
-  }
-  if (l.features.allWhiteInterior === true) no.push('інтер\'єр весь білий');
-  if (yes.length) lines.push(`✅ ${e(yes.join(', '))}`);
-  if (no.length) lines.push(`❌ ${e(no.join(', '))}`);
-  if (unknown.length) lines.push(`❔ не вказано: ${e(unknown.join(', '))}`);
+  lines.push(...featureLines(l));
   if (ai?.redFlags.length) lines.push(`🚩 ${e(ai.redFlags.join('; '))}`);
 
   const meta = [`⭐ ${s}/10`, l.publishedAt ? `🕐 ${ago(l.publishedAt)}` : '', sourceLine(l)]
@@ -113,7 +132,12 @@ export function messageLink(chatId: string, messageId: number): string | undefin
 
 /** Две первые строки карточки без тегов (они уже экранированы — годятся для HTML) */
 export function cardTitle(body: string): string {
-  return body.split('\n').slice(0, 2).map((s) => s.replace(/<[^>]+>/g, '').trim()).join(' — ');
+  return body
+    .split('\n')
+    .filter((s) => !s.startsWith('🔥'))
+    .slice(0, 2)
+    .map((s) => s.replace(/\s*·\s*<a [^>]*>[^<]*<\/a>/g, '').replace(/<[^>]+>/g, '').trim())
+    .join(' — ');
 }
 
 function links(row: MessageRow): string {
@@ -123,21 +147,40 @@ function links(row: MessageRow): string {
     .join(' · ');
 }
 
+function cardMarks(r: MessageRow): string {
+  const liked = likedNames(r);
+  return [
+    liked.length && `❤️ ${e(liked.join(', '))}`,
+    r.claimed_by && `📞 ${e(r.claimed_by)}`,
+    r.deal_status === 'viewing' && `📅 ${e(r.viewing_note ?? 'перегляд, дата невідома')}`,
+    r.deal_status === 'refused' && '🚫 відмовили',
+    r.skipped_by && '🙅 не підходить',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+/** Отказали / не подходит — в конец списка */
+const closedLast = <T extends MessageRow>(rows: T[]): T[] => {
+  const order = (r: T) => (r.deal_status === 'refused' || r.skipped_by ? 1 : 0);
+  return [...rows].sort((a, b) => order(a) - order(b));
+};
+
+function cardItem(r: MessageRow, i: number, prefix = ''): string {
+  const marks = cardMarks(r);
+  return `${i + 1}. ${prefix}${cardTitle(r.body)}${marks ? `\n    ${marks}` : ''}\n    ${links(r)}`;
+}
+
 export function renderLikedList(rows: MessageRow[]): string {
   if (!rows.length) return '❤️ Поки що нічого не сподобалось. Тисніть «❤️ Подобається» на картці квартири.';
-  const order = (r: MessageRow) => (r.deal_status === 'refused' || r.skipped_by ? 1 : 0);
-  const sorted = [...rows].sort((a, b) => order(a) - order(b));
-  const items = sorted.map((r, i) => {
-    const marks = [
-      `❤️ ${e(likedNames(r).join(', '))}`,
-      r.claimed_by && `📞 ${e(r.claimed_by)}`,
-      r.deal_status === 'viewing' && `📅 ${e(r.viewing_note ?? 'перегляд, дата невідома')}`,
-      r.deal_status === 'refused' && '🚫 відмовили',
-      r.skipped_by && '🙅 не підходить',
-    ].filter(Boolean);
-    return `${i + 1}. ${cardTitle(r.body)}\n    ${marks.join(' · ')}\n    ${links(r)}`;
-  });
+  const items = closedLast(rows).map((r, i) => cardItem(r, i));
   return `❤️ <b>Сподобались (${rows.length})</b>\n\n${items.join('\n\n')}`;
+}
+
+export function renderTopList(rows: Array<MessageRow & { score: number }>): string {
+  if (!rows.length) return `🔥 Топових квартир (оцінка ${TOP_SCORE}+) за останні 30 днів ще не було.`;
+  const items = closedLast(rows).map((r, i) => cardItem(r, i, `<b>${r.score}/10</b> · `));
+  return `🔥 <b>Топ за 30 днів — оцінка ${TOP_SCORE}+ (${rows.length})</b>\n\n${items.join('\n\n')}`;
 }
 
 export function renderViewings(rows: MessageRow[], now = Date.now()): string {

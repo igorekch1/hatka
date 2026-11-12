@@ -6,11 +6,11 @@ import { parseViewingTime } from './when.ts';
 
 export type Button = { text: string; data?: string; url?: string };
 /** Ответ на команду: просто текст, или текст с кнопками, или вопрос, на который ждём reply */
-export type Reply = string | { text: string; buttons?: Button[][]; ask?: 'filters' };
+export type Reply = string | { text: string; buttons?: Button[][]; ask?: 'filters' | 'add' | 'help' };
 export type CommandHandler = (cmd: string, args: string, chatId: string, who: string) => Promise<Reply | undefined>;
 
 /** Чего ждём в ответ на сообщение бота (хранится в kv: pending:<chat>:<msg>) */
-type Pending = { kind: 'filters'; ts: number } | { kind: 'viewing'; messageId: number; ts: number };
+type Pending = { kind: 'filters' | 'add' | 'help'; ts: number } | { kind: 'viewing'; messageId: number; ts: number };
 
 const TG_LIMIT = 3900;
 
@@ -102,20 +102,36 @@ export class Bot {
       : { is_disabled: true };
   }
 
-  /** Отправляет карточку квартиры в общий чат */
-  async sendListing(listingId: string, body: string, openUrl: string, previewUrl?: string): Promise<void> {
+  /** Отправляет карточку квартиры в общий чат. likedBy — сразу с «❤️ Подобається» (для /add). */
+  async sendListing(
+    listingId: string, body: string, openUrl: string, previewUrl?: string, init: { likedBy?: string } = {},
+  ): Promise<number | undefined> {
     if (CONFIG.dryRun || !CONFIG.botToken) {
       console.log(`\n──────── ${listingId}\n${body.replace(/<[^>]+>/g, '')}\n🔗 ${openUrl}`);
-      return;
+      return undefined;
     }
+    const liked = init.likedBy ? JSON.stringify([init.likedBy]) : null;
+    const status = renderStatusLines({ liked_by: liked, claimed_by: null, skipped_by: null, deal_status: null, deal_by: null, viewing_note: null });
     const msg = await this.api<{ message_id: number }>('sendMessage', {
       chat_id: CONFIG.chatId,
-      text: body,
+      text: body + status,
       parse_mode: 'HTML',
       link_preview_options: this.preview(previewUrl),
       reply_markup: this.cardKeyboard(openUrl),
     });
-    this.store.saveMessage({ chatId: String(CONFIG.chatId), messageId: msg.message_id, listingId, body, openUrl, previewUrl });
+    const chatId = String(CONFIG.chatId);
+    this.store.saveMessage({ chatId, messageId: msg.message_id, listingId, body, openUrl, previewUrl });
+    if (liked) this.store.updateMessage(chatId, msg.message_id, { liked_by: liked });
+    return msg.message_id;
+  }
+
+  /** Ставит «❤️ Подобається» от who на существующей карточке (без снятия, если уже стоит) */
+  async likeCard(row: MessageRow, who: string) {
+    const names = likedNames(row);
+    if (names.includes(who)) return;
+    row.liked_by = JSON.stringify([...names, who]);
+    this.store.updateMessage(row.chat_id, row.message_id, { liked_by: row.liked_by });
+    await this.refreshCard(row);
   }
 
   async sendText(text: string): Promise<void> {
@@ -139,7 +155,11 @@ export class Bot {
         link_preview_options: { is_disabled: true },
       };
       if (replyTo && i === 0) body.reply_parameters = { message_id: replyTo, allow_sending_without_reply: true };
-      if (last && msg.ask) body.reply_markup = { force_reply: true, input_field_placeholder: 'Напишіть фільтри…' };
+      if (last && msg.ask)
+        body.reply_markup = {
+          force_reply: true,
+          input_field_placeholder: { add: 'https://… нотатка', help: 'Ваше питання…', filters: 'Напишіть фільтри…' }[msg.ask],
+        };
       else if (last && msg.buttons) body.reply_markup = this.inlineKeyboard(msg.buttons);
       const sent = await this.api<{ message_id: number }>('sendMessage', body);
       if (last && msg.ask) this.setPending(chatId, sent.message_id, { kind: msg.ask, ts: Date.now() });
@@ -307,9 +327,9 @@ export class Bot {
     const p = JSON.parse(raw) as Pending;
     this.store.delKv(key);
     if (p.kind === 'viewing') await this.onViewingAnswer(chatId, p.messageId, text, who, m.message_id);
-    else if (p.kind === 'filters') {
-      if (CANCEL.test(text.trim())) return void (await this.reply(chatId, 'Гаразд, фільтри не змінюю.', m.message_id));
-      const r = await h('filters', text, chatId, who);
+    else {
+      if (CANCEL.test(text.trim())) return void (await this.reply(chatId, 'Гаразд, скасовано.', m.message_id));
+      const r = await h(p.kind, text, chatId, who);
       if (r) await this.reply(chatId, r, m.message_id);
     }
   }
@@ -321,11 +341,14 @@ export class Bot {
       commands: [
         { command: 'menu', description: 'Меню радара' },
         { command: 'filters', description: 'Фільтри пошуку: показати / змінити' },
+        { command: 'add', description: 'Додати свою квартиру за посиланням' },
+        { command: 'top', description: 'Топові квартири (оцінка 7+)' },
         { command: 'liked', description: 'Квартири, що сподобались' },
         { command: 'viewings', description: 'Записи на перегляд' },
         { command: 'status', description: 'Стан радара і статистика' },
         { command: 'pause', description: 'Поставити сповіщення на паузу' },
         { command: 'resume', description: 'Знову надсилати квартири' },
+        { command: 'help', description: 'Допомога: спитати про бота' },
         { command: 'chatid', description: 'Показати id цього чату' },
       ],
     }).catch(() => {});

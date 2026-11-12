@@ -1,14 +1,13 @@
 import type { FeatureKey } from './types.ts';
 
 /* ──────────────────────────────────────────────────────────────────────────
- * ФИЛЬТРЫ. Это значения по умолчанию — в боте их меняют через /filters
- * (сохраняются в базе и переживают перезапуск). Кнопка «Стандартні» в боте
- * возвращает к тому, что записано здесь.
+ * ФИЛЬТРЫ задаются только из бота (/filters) и хранятся в базе.
+ * Пока они не заданы, бот ничего не присылает — нет критериев.
  * ────────────────────────────────────────────────────────────────────────── */
 export type Filters = {
   /** Потолок аренды в долларах (гривневые цены пересчитываются по курсу НБУ) */
   maxPriceUsd: number;
-  /** Ниже — подозрительно дёшево (развод/посуточно) */
+  /** Ниже — подозрительно дёшево (развод/посуточно); $150 по умолчанию — защита, а не пожелание */
   minPriceUsd: number;
   /** Подходящие административные районы Львова (по-украински) */
   districts: string[];
@@ -33,37 +32,40 @@ export type Filters = {
   extra: string;
 };
 
-export const DEFAULT_FILTERS: Filters = {
-  maxPriceUsd: 1000,
+/** Цена выше — считаем «без ограничения» */
+export const NO_PRICE_LIMIT = 100_000;
+
+/**
+ * Нейтральная основа: «ничего не требуем». От неё строятся фильтры из первого /filters —
+ * всё, что пользователь не упомянул, остаётся без ограничений.
+ */
+export const EMPTY_FILTERS: Filters = {
+  maxPriceUsd: NO_PRICE_LIMIT,
   minPriceUsd: 150,
-  districts: ['Франківський', 'Шевченківський', 'Галицький'],
+  districts: ['Франківський', 'Шевченківський', 'Галицький', 'Залізничний', 'Личаківський', 'Сихівський'],
   allowUnknownDistrict: true,
   minRooms: null,
   maxRooms: null,
   minArea: null,
-  dogFriendly: true,
-  rejectSmallDogsOnly: true,
-  rejectOnlyOnePerson: true,
-  dreamComplexes: ['америка'],
-  wishes: {
-    undergroundParking: 2,
-    dishwasher: 1.5,
-    acInBedroom: 1.5,
-    gasStove: 1,
-    shower: 1,
-    twoDesks: 1,
-    bright: 0.5,
-  },
+  dogFriendly: false,
+  rejectSmallDogsOnly: false,
+  rejectOnlyOnePerson: false,
+  dreamComplexes: [],
+  wishes: {},
   minScore: 0,
   extra: '',
 };
 
 /** Текущие фильтры. Объект один и тот же на всё приложение — меняется на месте (applyFilters) */
-export const FILTERS: Filters = structuredClone(DEFAULT_FILTERS);
+export const FILTERS: Filters = structuredClone(EMPTY_FILTERS);
+/** configured = false — фильтры не заданы, объявления не присылаем */
+export const FILTERS_STATE = { configured: false };
 
 /** «Не всё белое» — отдельный бонус, если ИИ уверен, что интерьер НЕ полностью белый */
 export const NOT_ALL_WHITE_WEIGHT = 0.5;
 export const DREAM_COMPLEX_BONUS = 1.5;
+/** С такой оценки карточка получает шапку «🔥 ТОП» и попадает в /top */
+export const TOP_SCORE = 7;
 
 export const ALL_DISTRICTS = ['Франківський', 'Шевченківський', 'Галицький', 'Залізничний', 'Личаківський', 'Сихівський'];
 
