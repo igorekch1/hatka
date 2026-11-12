@@ -1,11 +1,13 @@
 import { aiEnabled } from './ai.ts';
 import { Bot, type Reply } from './bot.ts';
-import { CONFIG, DEFAULT_FILTERS, FILTERS } from './config.ts';
+import { CONFIG, FILTERS, FILTERS_STATE, TOP_SCORE } from './config.ts';
 import { Store } from './db.ts';
-import { applyFilters, describeFilters, loadFilters, parseFilters, sameFilters, sanitizeFilters } from './filters.ts';
+import { applyFilters, clearFilters, describeFilters, filtersSnapshot, loadFilters, parseFilters, restoreSnapshot, sameFilters } from './filters.ts';
 import { refreshFx } from './fx.ts';
+import { answerHelp } from './help.ts';
+import { ADD_HELP, addManual } from './manual.ts';
 import { Pipeline } from './pipeline.ts';
-import { renderLikedList, renderViewings } from './render.ts';
+import { renderLikedList, renderTopList, renderViewings } from './render.ts';
 import { domriaSource } from './sources/domria.ts';
 import { lunSource } from './sources/lun.ts';
 import { olxSource } from './sources/olx.ts';
@@ -79,19 +81,35 @@ async function loop(src: Source) {
 function menu(): Reply {
   const paused = store.getKv('paused') === '1';
   return {
-    text: '🏠 <b>Радар квартир — меню</b>',
+    text: FILTERS_STATE.configured
+      ? '🏠 <b>Радар квартир — меню</b>'
+      : '🏠 <b>Радар квартир — меню</b>\n⚠️ Фільтри не задані — нічого не надсилаю. Натисніть «✏️ Змінити фільтри».',
     buttons: [
       [{ text: '⚙️ Фільтри', data: 'm:filters' }, { text: '✏️ Змінити фільтри', data: 'm:filters_edit' }],
-      [{ text: '❤️ Сподобались', data: 'm:liked' }, { text: '📅 Перегляди', data: 'm:viewings' }],
+      [{ text: '🔥 Топ', data: 'm:top' }, { text: '❤️ Сподобались', data: 'm:liked' }],
+      [{ text: '📅 Перегляди', data: 'm:viewings' }],
+      [{ text: '➕ Додати свою квартиру', data: 'm:add' }],
       [{ text: '📊 Стан', data: 'm:status' }, paused ? { text: '▶️ Продовжити', data: 'm:resume' } : { text: '⏸ Пауза', data: 'm:pause' }],
+      [{ text: '❓ Допомога', data: 'm:help' }],
     ],
   };
 }
 
 const FILTER_BUTTONS = [
-  [{ text: '✏️ Змінити', data: 'm:filters_edit' }, { text: '🔄 Стандартні', data: 'm:filters_reset' }],
+  [{ text: '✏️ Змінити', data: 'm:filters_edit' }, { text: '🗑 Очистити', data: 'm:filters_clear' }],
   [{ text: '🏠 Меню', data: 'm:menu' }],
 ];
+
+/** Первый запуск / фильтры очищены: просим прислать фильтры ответом — после ответа поиск стартует сам */
+const ONBOARDING = [
+  '👋 <b>Фільтри ще не задані — поки нічого не надсилаю.</b>',
+  '',
+  'Напишіть, що шукаєте, <b>у відповідь на це повідомлення</b> (reply) — списком або текстом. Наприклад:',
+  '<i>до 900$, Франківський або Галицький, 2 кімнати від 50 м², з собакою, бажано посудомийка і паркінг</i>',
+  '',
+  'Щойно збережу фільтри — одразу почну пошук. Нічого додатково писати не треба.',
+  'Те саме можна одним повідомленням: <code>/filters до 900$, Галицький…</code>',
+].join('\n');
 
 const FILTERS_HELP = [
   '✏️ <b>Напишіть нові фільтри у відповідь на це повідомлення</b> — списком або звичайним текстом, наприклад:',
@@ -104,51 +122,63 @@ const FILTERS_HELP = [
 ].filter((l, i, a) => l || a[i - 1]).join('\n');
 
 async function updateFilters(text: string): Promise<Reply> {
+  const first = !FILTERS_STATE.configured;
   const prev = structuredClone(FILTERS);
   const res = await parseFilters(text, prev);
   if (sameFilters(res.filters, prev))
     return {
-      text: '🤔 Не зрозумів, що змінити — фільтри лишились ті самі. Спробуйте сформулювати інакше.',
-      buttons: [[{ text: '✏️ Ще раз', data: 'm:filters_edit' }]],
+      text: first
+        ? '🤔 Не зрозумів жодного критерію — фільтри досі не задані. Спробуйте інакше, напр. «до 900$, Галицький, 2 кімнати».'
+        : '🤔 Не зрозумів, що змінити — фільтри лишились ті самі. Спробуйте сформулювати інакше.',
+      ...(first ? { ask: 'filters' as const } : { buttons: [[{ text: '✏️ Ще раз', data: 'm:filters_edit' }]] }),
     };
-  store.setKv('filters_prev', JSON.stringify(prev));
+  store.setKv('filters_prev', filtersSnapshot());
   applyFilters(store, res.filters);
   const changes = res.changes.length ? res.changes.map((c) => `• ${escapeHtml(c)}`).join('\n') + '\n\n' : '';
+  const title = first ? '✅ <b>Фільтри збережено — починаю пошук!</b>' : '✅ <b>Фільтри оновлено</b>';
   return {
-    text: `✅ <b>Фільтри оновлено</b>${res.via === 'basic' ? ' (простий розбір, без ШІ)' : ''}\n${changes}${describeFilters()}\n\n<i>Діють для нових оголошень.</i>`,
+    text: `${title}${res.via === 'basic' ? ' (простий розбір, без ШІ)' : ''}\n${changes}${describeFilters()}\n\n<i>Діють для нових оголошень.</i>`,
     buttons: [[{ text: '↩️ Скасувати зміни', data: 'm:filters_undo' }, { text: '✏️ Змінити ще', data: 'm:filters_edit' }]],
   };
 }
 
-async function onCommand(cmd: string, args: string, chatId: string): Promise<Reply | undefined> {
+async function onCommand(cmd: string, args: string, chatId: string, who: string): Promise<Reply | undefined> {
   switch (cmd) {
     case 'chatid':
       return `id цього чату: <code>${chatId}</code>`;
-    case 'start':
     case 'help':
+      return answerHelp(args);
+    case 'start':
     case 'menu':
       return menu();
     case 'filters':
     case 'filter':
       if (args) return updateFilters(args);
+      if (!FILTERS_STATE.configured) return { text: ONBOARDING, ask: 'filters' };
       return { text: describeFilters(), buttons: FILTER_BUTTONS };
     case 'filters_edit':
-      return { text: FILTERS_HELP, ask: 'filters' };
-    case 'filters_reset':
-      store.setKv('filters_prev', JSON.stringify(FILTERS));
-      applyFilters(store, DEFAULT_FILTERS);
+      return { text: FILTERS_STATE.configured ? FILTERS_HELP : ONBOARDING, ask: 'filters' };
+    case 'filters_clear':
+      if (!FILTERS_STATE.configured) return { text: ONBOARDING, ask: 'filters' };
+      store.setKv('filters_prev', filtersSnapshot());
+      clearFilters(store);
       return {
-        text: `🔄 Повернув стандартні фільтри.\n\n${describeFilters()}`,
-        buttons: [[{ text: '↩️ Скасувати', data: 'm:filters_undo' }, { text: '✏️ Змінити', data: 'm:filters_edit' }]],
+        text: '🗑 Фільтри очищено — <b>нічого не надсилаю</b>, доки не задасте нові.',
+        buttons: [[{ text: '↩️ Скасувати', data: 'm:filters_undo' }, { text: '✏️ Задати фільтри', data: 'm:filters_edit' }]],
       };
     case 'filters_undo': {
       const prev = store.getKv('filters_prev');
       if (!prev) return 'Немає попередньої версії фільтрів.';
-      const cur = JSON.stringify(FILTERS);
-      applyFilters(store, sanitizeFilters(JSON.parse(prev), DEFAULT_FILTERS));
+      const cur = filtersSnapshot();
+      restoreSnapshot(store, prev);
       store.setKv('filters_prev', cur);
       return { text: `↩️ Повернув попередні фільтри.\n\n${describeFilters()}`, buttons: FILTER_BUTTONS };
     }
+    case 'add':
+      if (!args) return { text: ADD_HELP, ask: 'add' };
+      return addManual(store, bot, args, chatId, who);
+    case 'top':
+      return renderTopList(store.listTop(chatId, TOP_SCORE));
     case 'liked':
       return renderLikedList(store.listLiked(chatId));
     case 'viewings':
@@ -172,7 +202,7 @@ async function onCommand(cmd: string, args: string, chatId: string): Promise<Rep
         .join('\n');
       return [
         `${store.getKv('paused') === '1' ? '⏸ На паузі' : '🟢 Працюю'} · аптайм ${Math.round((Date.now() - startedAt) / 3600_000)} год`,
-        `ШІ-розбір: ${aiEnabled() ? 'увімк.' : 'вимк.'} · фільтр: до $${FILTERS.maxPriceUsd}, ${escapeHtml(FILTERS.districts.join('/'))} (детально — /filters)`,
+        `ШІ-розбір: ${aiEnabled() ? 'увімк.' : 'вимк.'} · ${FILTERS_STATE.configured ? 'фільтри задані (/filters)' : '⚠️ фільтри не задані — нічого не надсилаю'}`,
         '',
         src,
         '',
@@ -212,8 +242,10 @@ async function main() {
   }
 
   await bot
-    .sendText(`🟢 Радар квартир запущено. Стежу: ${CONFIG.sources.join(', ')}. Фільтр: до $${FILTERS.maxPriceUsd}, ${escapeHtml(FILTERS.districts.join(', '))}${FILTERS.dogFriendly ? ', з собакою' : ''}. Меню — /menu`)
+    .sendText(`🟢 Радар квартир запущено. Стежу: ${CONFIG.sources.join(', ')}. Меню — /menu`)
     .catch((e) => log('Не смог написать в чат — проверьте TELEGRAM_CHAT_ID и что бот добавлен в группу:', String(e)));
+  if (!FILTERS_STATE.configured)
+    await bot.reply(String(CONFIG.chatId), { text: ONBOARDING, ask: 'filters' }).catch((e) => log('Не смог отправить приглашение задать фильтры', String(e)));
 
   // Разносим старт источников, чтобы не стрелять запросами одновременно
   polling.forEach((s, i) => setTimeout(() => void loop(s), i * 7000));

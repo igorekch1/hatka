@@ -1,4 +1,4 @@
-import { CONFIG, FILTERS } from './config.ts';
+import { ALL_DISTRICTS, CONFIG, FILTERS, NO_PRICE_LIMIT } from './config.ts';
 import type { AiVerdict, Currency, Features, Listing, PetsPolicy } from './types.ts';
 import { log } from './util.ts';
 
@@ -14,7 +14,7 @@ function systemPrompt(): string {
     ? `\nДодаткові вимоги орендарів (перевір їх у полі extra_ok): «${f.extra.trim()}»`
     : '';
   return `${who}
-Бюджет до $${f.maxPriceUsd}. Потрібні райони: ${f.districts.join(', ')}.${extra}
+${f.maxPriceUsd < NO_PRICE_LIMIT ? `Бюджет до $${f.maxPriceUsd}. ` : ''}${f.districts.length < ALL_DISTRICTS.length ? `Потрібні райони: ${f.districts.join(', ')}.` : ''}${extra}
 
 Поверни ТІЛЬКИ JSON без пояснень і без markdown, рівно з такими полями:
 {

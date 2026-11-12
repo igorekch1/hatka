@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
+import { useSampleFilters } from './profile.ts';
 import { parseAiJson } from '../src/ai.ts';
 import { Store } from '../src/db.ts';
 import { hardFilter, keywordFeatures, mergeAi, score } from '../src/filter.ts';
@@ -13,6 +14,8 @@ import { mapOlxAd, olxPets } from '../src/sources/olx.ts';
 import { mapTelegramPost, parsePriceFromText } from '../src/sources/telegram.ts';
 import type { Listing } from '../src/types.ts';
 import { canonicalUrlKey, extractPhones, normalizeDistrict } from '../src/util.ts';
+
+useSampleFilters();
 
 const fx = (name: string) => JSON.parse(readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8'));
 const fresh = (l: Listing): Listing => ({ ...l, publishedAt: new Date() });
@@ -74,6 +77,7 @@ test('Telegram: цена, телефоны, животные из текста',
   assert.deepEqual(parsePriceFromText('Ціна 18 000 грн + комуналка'), { price: 18000, currency: 'UAH' });
   assert.deepEqual(parsePriceFromText('💵 $750/міс'), { price: 750, currency: 'USD' });
   assert.deepEqual(parsePriceFromText('800 у.о.'), { price: 800, currency: 'USD' });
+  assert.deepEqual(parsePriceFromText('дзвонити після 18\n700 $/міс'), { price: 700, currency: 'USD' });
   assert.deepEqual(extractPhones('тел. 067 123 45 67 або +38(093)765-43-21'), ['+380671234567', '+380937654321']);
   const p = mapTelegramPost({
     channel: 'orenda_lviv', messageId: 42, date: new Date(), link: 'https://t.me/orenda_lviv/42',

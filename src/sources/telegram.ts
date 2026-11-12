@@ -15,8 +15,9 @@ import { extractPhones, log, normalizeDistrict } from '../util.ts';
 export function parsePriceFromText(text: string): { price?: number; currency?: Currency } {
   const t = text.replace(/ /g, ' ');
   const patterns: RegExp[] = [
-    /(\$|usd|💵)\s*(\d[\d\s.,]{1,7})/i,
-    /(\d[\d\s.,]{1,7})\s*(\$|usd|у\.?\s?о\.?|дол|грн|uah|₴|гривен|€|eur|євро)/i,
+    // Внутри числа — только пробел/точка/запятая, не перенос строки: «після 18⏎700 $» ≠ 18700
+    /(\$|usd|💵)[ \t]*(\d[\d .,]{1,7})/i,
+    /(\d[\d .,]{1,7})[ \t]*(\$|usd|у\.?\s?о\.?|дол|грн|uah|₴|гривен|€|eur|євро)/i,
   ];
   for (const re of patterns) {
     const m = t.match(re);

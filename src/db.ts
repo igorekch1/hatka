@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
-export type ListingStatus = 'notified' | 'rejected' | 'old' | 'duplicate' | 'error';
+export type ListingStatus = 'notified' | 'rejected' | 'old' | 'duplicate' | 'error' | 'manual';
 
 /** Статус «сделки» по карточке: записались на просмотр / хозяин отказал */
 export type DealStatus = 'viewing' | 'refused';
@@ -138,6 +138,21 @@ export class Store {
     this.db
       .prepare(`UPDATE messages SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE chat_id = ? AND message_id = ?`)
       .run(...keys.map((k) => (patch as any)[k] ?? null), chatId, messageId);
+  }
+
+  findMessageByListing(chatId: string, listingId: string): MessageRow | undefined {
+    return this.db
+      .prepare('SELECT * FROM messages WHERE chat_id = ? AND listing_id = ? ORDER BY message_id DESC LIMIT 1')
+      .get(chatId, listingId) as MessageRow | undefined;
+  }
+
+  /** Карточки с оценкой от minScore (оценка — из listings) за последние days дней, свежие сверху */
+  listTop(chatId: string, minScore: number, days = 30, limit = 40): Array<MessageRow & { score: number }> {
+    return this.db
+      .prepare(`SELECT m.*, l.score AS score FROM messages m JOIN listings l ON l.id = m.listing_id
+                WHERE m.chat_id = ? AND l.score >= ? AND COALESCE(m.sent_at, l.created_at) >= ?
+                ORDER BY COALESCE(m.sent_at, 0) DESC, m.message_id DESC LIMIT ?`)
+      .all(chatId, minScore, Date.now() - days * 86400_000, limit) as Array<MessageRow & { score: number }>;
   }
 
   /** Карточки, которые кому-то понравились — свежие сверху */

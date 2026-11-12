@@ -9,7 +9,7 @@ import { districtFromMicro, getJson, num, sleep } from '../util.ts';
  */
 const SEARCH =
   'https://dom.ria.com/node/searchEngine/v2/?category=1&realty_type=2&operation=3&state_id=5&city_id=5&sort=created_at&limit=20&page=0&lang_id=4';
-const DETAILS = (id: string | number) => `https://dom.ria.com/realty/data/${id}?lang_id=4`;
+export const DETAILS = (id: string | number) => `https://dom.ria.com/realty/data/${id}?lang_id=4`;
 
 export function mapDomRia(d: any): Listing {
   const externalId = String(d.realty_id ?? d.id);

@@ -1,6 +1,6 @@
 import { aiEnabled, analyze } from './ai.ts';
 import type { Bot } from './bot.ts';
-import { CONFIG, FILTERS } from './config.ts';
+import { CONFIG, FILTERS, FILTERS_STATE } from './config.ts';
 import type { Store } from './db.ts';
 import { adjustPets, aiFilter, hardFilter, keywordFeatures, mergeAi, score } from './filter.ts';
 import { toUsd } from './fx.ts';
@@ -75,6 +75,9 @@ export class Pipeline {
       return;
     }
     this.store.markSeen(early, l.id);
+
+    // Фильтры не заданы — критериев нет, ничего не присылаем (и не тратим ИИ)
+    if (!FILTERS_STATE.configured) return this.reject(l, 'фільтри не задані');
 
     const pre = hardFilter(l);
     if (!pre.ok) return this.reject(l, pre.reason);
