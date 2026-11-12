@@ -59,7 +59,8 @@ There are **no default filters**: until filters are set, the bot sends nothing. 
 it posts *"Фільтри ще не задані"* ("filters are not set") — reply to that message with your criteria and the search
 starts immediately. No extra command is needed.
 
-Write filters as a list or as free text, for example:
+Write filters as a list or as free text. Examples on this page use Lviv districts — the bot's own hints use the
+districts of the configured city. For example:
 
 ```
 до 900$, Франківський або Галицький, 2 кімнати від 50 м², з собакою середнього розміру,

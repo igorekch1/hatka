@@ -1,7 +1,7 @@
 services:
   radar:
     build: .
-    container_name: lviv-flats-radar
+    container_name: hatka
     restart: unless-stopped
     env_file: .env
     environment:
