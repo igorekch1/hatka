@@ -1,13 +1,14 @@
+import { CONFIG } from '../config.ts';
 import type { Currency, Features, Listing, PetsPolicy, Source } from '../types.ts';
 import { canonicalUrlKey, getJson, normalizeDistrict, num, stripHtml } from '../util.ts';
 
 /**
  * OLX: тот же JSON, которым пользуется сайт.
- * category 1760 = «Довгострокова оренда квартир», region 5 / city 176 = Львів.
+ * category 1760 = «Довгострокова оренда квартир», region_id / city_id — из профиля города (CITY).
  * Берём весь город (а не только выбранные районы), чтобы не терять объявления без района.
  */
-const URL =
-  'https://www.olx.ua/api/v1/offers/?offset=0&limit=40&category_id=1760&region_id=5&city_id=176&sort_by=created_at:desc';
+const URL = (o: { regionId: number; cityId: number }) =>
+  `https://www.olx.ua/api/v1/offers/?offset=0&limit=40&category_id=1760&region_id=${o.regionId}&city_id=${o.cityId}&sort_by=created_at:desc`;
 
 type Param = { key: string; value: any };
 
@@ -79,7 +80,9 @@ export function mapOlxAd(ad: any): Listing {
 export const olxSource: Source = {
   name: 'olx',
   async poll() {
-    const res = await getJson<{ data: any[] }>(URL, { referer: 'https://www.olx.ua/' });
+    const ids = CONFIG.city.olx;
+    if (!ids) throw new Error(`OLX: для міста ${CONFIG.city.name} не задані OLX_REGION_ID / OLX_CITY_ID`);
+    const res = await getJson<{ data: any[] }>(URL(ids), { referer: 'https://www.olx.ua/' });
     return (res.data ?? []).map(mapOlxAd);
   },
 };

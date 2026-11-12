@@ -73,7 +73,7 @@ What the LLM extracts:
 | Field | Example phrase |
 |---|---|
 | Max / min price (UAH and EUR converted at the NBU rate) | `до 900$`, `до 40 000 грн` |
-| Districts (6 administrative districts of Lviv) | `Франківський або Галицький`, `будь-який район` |
+| Districts (administrative districts of the configured city; `центр` maps to the central one) | `Франківський або Галицький`, `будь-який район` |
 | Send listings without a district | `якщо район не вказано — теж надсилати` |
 | Rooms, area | `2 кімнати`, `від 2 кімнат`, `від 50 м²` |
 | Medium-sized dog; reject "small dogs only" | `з собакою` |

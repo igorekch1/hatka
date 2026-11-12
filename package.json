@@ -1,8 +1,8 @@
 {
-  "name": "lviv-flats-radar",
+  "name": "hatka",
   "version": "1.0.0",
   "private": true,
-  "description": "Telegram bot that aggregates long-term rental listings in Lviv (OLX, DIM.RIA, Lun, Telegram channels), filters them with an LLM and posts matches to a group chat",
+  "description": "Telegram bot that aggregates long-term rental listings in Ukrainian cities (OLX, DIM.RIA, Lun, Telegram channels), filters them with an LLM and posts matches to a group chat",
   "type": "module",
   "engines": {
     "node": ">=22.18"

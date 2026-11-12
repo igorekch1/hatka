@@ -1,3 +1,4 @@
+import { CONFIG } from '../config.ts';
 import { parseCurrency } from '../fx.ts';
 import type { Features, Listing, PetsPolicy, Source } from '../types.ts';
 import { canonicalUrlKey, formatPhone, getJson, normalizeDistrict, num } from '../util.ts';
@@ -5,10 +6,11 @@ import { canonicalUrlKey, formatPhone, getJson, normalizeDistrict, num } from '.
 /**
  * Lun.ua — сам агрегатор (rieltor.ua, OLX, DIM.RIA и др.). Важно: отдаёт телефоны,
  * поле про животных, технику и даже «укриття в підземному паркінгу».
- * geoId 10012684 = Львів, sectionId 2 = довгострокова оренда квартир.
+ * geoId — город (из профиля CITY), sectionId 2 = довгострокова оренда квартир.
  */
-const URL =
-  'https://lun.ua/api/v2/market/realties?sectionId=2&geoId=10012684&language=uk&sort=insert_time&page=1';
+const URL = () =>
+  `https://lun.ua/api/v2/market/realties?sectionId=2&geoId=${CONFIG.city.lunGeoId}&language=uk&sort=insert_time&page=1`;
+const PAGE = () => `https://lun.ua/rent/${CONFIG.city.lunSlug}/flats`;
 
 const LUN_PETS: Record<string, PetsPolicy> = { yes: 'dogs_ok', no: 'no', some: 'some', unknown: 'unknown' };
 
@@ -45,7 +47,7 @@ export function mapLunCard(c: any): Listing {
     id: `lun:${externalId}`,
     source: 'lun',
     externalId,
-    url: c.urlRaw ?? `https://lun.ua/rent/lviv/flats`,
+    url: c.urlRaw ?? PAGE(),
     origin: c.site?.displayName,
     title: c.header,
     text: String(c.text ?? ''),
@@ -77,7 +79,7 @@ export function mapLunCard(c: any): Listing {
 export const lunSource: Source = {
   name: 'lun',
   async poll() {
-    const res = await getJson<{ cards: any[] }>(URL, { referer: 'https://lun.ua/rent/lviv/flats' });
+    const res = await getJson<{ cards: any[] }>(URL(), { referer: PAGE() });
     return (res.cards ?? []).map(mapLunCard);
   },
 };

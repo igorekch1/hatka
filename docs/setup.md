@@ -35,7 +35,8 @@ npm install
 cp .env.example .env
 ```
 
-Fill in `TELEGRAM_BOT_TOKEN` and `ANTHROPIC_API_KEY` (all variables: [configuration.md](configuration.md)), then:
+Fill in `TELEGRAM_BOT_TOKEN`, `ANTHROPIC_API_KEY` and `CITY` (`lviv`, `kyiv`, `odesa`, `kharkiv` or `dnipro`; all variables:
+[configuration.md](configuration.md)), then:
 
 ```bash
 npm start

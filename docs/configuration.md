@@ -6,6 +6,8 @@ Set in `.env` (git-ignored). Copy [`.env.example`](../.env.example) to start.
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
+| `CITY` | no | `lviv` | City profile: `lviv`, `kyiv`, `odesa`, `kharkiv`, `dnipro` (see [Cities](#cities)) |
+| `OLX_REGION_ID`, `OLX_CITY_ID` | no | from profile | OLX location ids; needed for OLX outside Lviv |
 | `TELEGRAM_BOT_TOKEN` | yes | — | Token from @BotFather |
 | `TELEGRAM_CHAT_ID` | yes | — | Group id; get it with `/chatid`. While empty, the bot only answers `/chatid` |
 | `ANTHROPIC_API_KEY` | recommended | — | Enables LLM parsing of listings, natural-language filters and `/help` |
@@ -31,7 +33,7 @@ The model (`Filters` in `src/config.ts`):
 | Field | Type | Meaning |
 |---|---|---|
 | `maxPriceUsd` / `minPriceUsd` | number | Price range in USD; `100000` means "no limit". `minPriceUsd` defaults to 150 as a scam guard |
-| `districts` | string[] | Allowed administrative districts of Lviv |
+| `districts` | string[] | Allowed administrative districts of the configured city |
 | `allowUnknownDistrict` | boolean | Let listings without a detectable district through (flagged) |
 | `minRooms`, `maxRooms`, `minArea` | number \| null | `null` = no limit |
 | `dogFriendly` | boolean | Reject "no pets" / "no dogs" (unless the text says pets are negotiable) |
@@ -51,4 +53,31 @@ In `src/config.ts`:
 
 - `TOP_SCORE = 7` — score from which a card gets the 🔥 header and appears in `/top`;
 - `DREAM_COMPLEX_BONUS = 1.5`, `NOT_ALL_WHITE_WEIGHT = 0.5` — fixed score components;
-- `MICRODISTRICT_TO_DISTRICT` — neighbourhood → district mapping used when a site gives only a neighbourhood.
+
+## Cities
+
+`CITY` picks a profile from `src/cities.ts`:
+
+| `CITY` | City | Lun `geoId` | DIM.RIA `state_id/city_id` | OLX ids | Districts | Neighbourhood table |
+|---|---|---|---|---|---|---|
+| `lviv` | Львів | 10012684 | 5 / 5 | 5 / 176 | 6 | yes |
+| `kyiv` | Київ | 10009580 | 10 / 10 | set via env | 10 | — |
+| `odesa` | Одеса | 10016589 | 12 / 12 | set via env | 4 (post-2020) | — |
+| `kharkiv` | Харків | 10024345 | 7 / 7 | set via env | 9 | — |
+| `dnipro` | Дніпро | 10006463 | 11 / 11 | set via env | 8 | — |
+
+Lun and DIM.RIA ids were verified against the live APIs (they return listings of that city). OLX ids could not be
+verified because OLX blocks API clients; they are known for Lviv only.
+
+**Adding a city:**
+
+1. **Lun:** open `https://lun.ua/rent/<city>/flats` — the page source contains `?geo_id=<id>&section_id=2`.
+2. **DIM.RIA:** for regional centres `state_id` and `city_id` are usually the same number; check that
+   `https://dom.ria.com/node/searchEngine/v2/?category=1&realty_type=2&operation=3&state_id=<id>&city_id=<id>&limit=5`
+   returns listings of that city.
+3. **Districts:** list the administrative districts with a `match` regex covering Ukrainian and Russian spellings and
+   former names; set `centerDistrict`; optionally add `microdistricts`.
+4. Add the profile to `CITIES` and run `npm test` — a test checks that every district name is recognised unambiguously.
+
+Changing `CITY` for an existing database: saved filters keep only districts that exist in the new city (if none
+remain, all districts are allowed) — re-check them with `/filters`.

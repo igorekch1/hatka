@@ -35,7 +35,13 @@ const pipeline = new Pipeline(store, bot);
 const startedAt = Date.now();
 
 const ALL: Source[] = [olxSource, lunSource, domriaSource];
-const polling = ALL.filter((s) => CONFIG.sources.includes(s.name));
+const polling = ALL.filter((s) => CONFIG.sources.includes(s.name)).filter((s) => {
+  if (s.name === 'olx' && !CONFIG.city.olx) {
+    log(`OLX выключен: для города ${CONFIG.city.name} не заданы OLX_REGION_ID / OLX_CITY_ID`);
+    return false;
+  }
+  return true;
+});
 
 type Health = { lastOk?: number; errors: number; lastError?: string; warned: boolean; found: number };
 const health = new Map<string, Health>();
@@ -95,6 +101,10 @@ function menu(): Reply {
   };
 }
 
+/** Районы для примеров в подсказках — из профиля города */
+const EX_DISTRICT = CONFIG.city.districts[0].name;
+const EX_DISTRICTS = `${CONFIG.city.districts[0].name} або ${CONFIG.city.districts[1].name}`;
+
 const FILTER_BUTTONS = [
   [{ text: '✏️ Змінити', data: 'm:filters_edit' }, { text: '🗑 Очистити', data: 'm:filters_clear' }],
   [{ text: '🏠 Меню', data: 'm:menu' }],
@@ -105,18 +115,18 @@ const ONBOARDING = [
   '👋 <b>Фільтри ще не задані — поки нічого не надсилаю.</b>',
   '',
   'Напишіть, що шукаєте, <b>у відповідь на це повідомлення</b> (reply) — списком або текстом. Наприклад:',
-  '<i>до 900$, Франківський або Галицький, 2 кімнати від 50 м², з собакою, бажано посудомийка і паркінг</i>',
+  `<i>до 900$, ${EX_DISTRICTS}, 2 кімнати від 50 м², з собакою, бажано посудомийка і паркінг</i>`,
   '',
   'Щойно збережу фільтри — одразу почну пошук. Нічого додатково писати не треба.',
-  'Те саме можна одним повідомленням: <code>/filters до 900$, Галицький…</code>',
+  `Те саме можна одним повідомленням: <code>/filters до 900$, ${EX_DISTRICT}…</code>`,
 ].join('\n');
 
 const FILTERS_HELP = [
   '✏️ <b>Напишіть нові фільтри у відповідь на це повідомлення</b> — списком або звичайним текстом, наприклад:',
   '',
-  '<i>до 900$, Франківський або Галицький, 2 кімнати від 50 м², обов\'язково посудомийка і паркінг, не перший поверх</i>',
+  `<i>до 900$, ${EX_DISTRICTS}, 2 кімнати від 50 м², обов'язково посудомийка і паркінг, не перший поверх</i>`,
   '',
-  'або щось одне: <i>«підніми бюджет до 1100»</i>, <i>«додай Личаківський»</i>, <i>«прибери вимогу про поверх»</i>.',
+  `або щось одне: <i>«підніми бюджет до 1100»</i>, <i>«додай ${CONFIG.city.districts[CONFIG.city.districts.length - 1].name}»</i>, <i>«прибери вимогу про поверх»</i>.`,
   aiEnabled() ? '' : '⚠️ ШІ вимкнено (немає ANTHROPIC_API_KEY) — зрозумію лише ціну, райони, кімнати, площу й мін. оцінку.',
   'Передумали — «скасувати».',
 ].filter((l, i, a) => l || a[i - 1]).join('\n');
@@ -128,7 +138,7 @@ async function updateFilters(text: string): Promise<Reply> {
   if (sameFilters(res.filters, prev))
     return {
       text: first
-        ? '🤔 Не зрозумів жодного критерію — фільтри досі не задані. Спробуйте інакше, напр. «до 900$, Галицький, 2 кімнати».'
+        ? `🤔 Не зрозумів жодного критерію — фільтри досі не задані. Спробуйте інакше, напр. «до 900$, ${EX_DISTRICT}, 2 кімнати».`
         : '🤔 Не зрозумів, що змінити — фільтри лишились ті самі. Спробуйте сформулювати інакше.',
       ...(first ? { ask: 'filters' as const } : { buttons: [[{ text: '✏️ Ще раз', data: 'm:filters_edit' }]] }),
     };
@@ -247,10 +257,10 @@ async function main() {
           tg.missing.length ? `\n⚠️ Не знайшов канали: ${escapeHtml(tg.missing.join(', '))} — перевірте @username і що ви в них підписані` : '',
         ].join('');
   }
-  const sites = CONFIG.sources.filter((s) => s !== 'telegram');
+  const sites = polling.map((s) => s.name);
 
   await bot
-    .sendText(`🟢 Радар квартир запущено.\n🌐 Сайти: ${sites.join(', ') || '—'}${tgLine}\nМеню — /menu`)
+    .sendText(`🟢 Радар квартир запущено · ${escapeHtml(CONFIG.city.name)}.\n🌐 Сайти: ${sites.join(', ') || '—'}${tgLine}\nМеню — /menu`)
     .catch((e) => log('Не смог написать в чат — проверьте TELEGRAM_CHAT_ID и что бот добавлен в группу:', String(e)));
   if (!FILTERS_STATE.configured)
     await bot.reply(String(CONFIG.chatId), { text: ONBOARDING, ask: 'filters' }).catch((e) => log('Не смог отправить приглашение задать фильтры', String(e)));
