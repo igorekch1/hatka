@@ -1,15 +1,18 @@
-# 🏠 Hatka — rental radar for Lviv
+# 🏠 Hatka — apartment rental radar for Ukrainian cities
 
 A Telegram bot that watches every major Ukrainian rental marketplace and a set of Telegram channels, picks out the
-long-term apartment listings in Lviv that match your criteria, and posts them to a shared group chat **within about a
+long-term apartment listings in your city that match your criteria, and posts them to a shared group chat **within about a
 minute of publication** — then helps the people in that group coordinate who calls, what they liked and when the
 viewings are.
 
 > *Hatka* (хатка) is Ukrainian for "little house".
 
+**Cities:** Lviv, Kyiv, Odesa, Kharkiv, Dnipro out of the box — one `CITY` variable; adding a city is a single
+profile entry (see [docs/configuration.md](docs/configuration.md#cities)).
+
 ## The problem
 
-Renting in Lviv is a race. Good apartments are gone within hours, and they are spread across OLX, DIM.RIA,
+Renting in a big Ukrainian city is a race. Good apartments are gone within hours, and they are spread across OLX, DIM.RIA,
 Rieltor/Lun and dozens of Telegram channels — each with its own filters (or none), duplicates of the same flat posted by
 several realtors, and important details (pets allowed? gas stove? underground parking?) buried in free text.
 Searching together with someone else adds another layer: who already called this one, which ones did we both like,
@@ -86,6 +89,8 @@ Details: [docs/architecture.md](docs/architecture.md).
 - **Stateless UI on top of chat** — conversational steps (filters, viewing date, `/add`) use `force_reply` prompts tracked in
   SQLite, which works with the bot's group privacy mode on.
 - **Time zone–correct date parsing** for viewings ("пт 12:30", "15 листопада о 10") in Europe/Kyiv regardless of the server's zone.
+- **City profiles instead of hard-coded geography** — site location ids, districts with their Ukrainian/Russian and
+  pre-reform spellings, the "center" alias and neighbourhood maps live in one file; prompts, parsers and links adapt to it.
 - **Tests on real data** — `node:test` suite including a replay of real OLX and Lun listings captured on 11.11.2026.
 
 ## Tech stack
@@ -98,7 +103,7 @@ Docker / Docker Compose · `node:test`
 ```bash
 git clone https://github.com/igorekch1/hatka.git && cd hatka
 npm install
-cp .env.example .env   # add TELEGRAM_BOT_TOKEN (and ideally ANTHROPIC_API_KEY)
+cp .env.example .env   # add TELEGRAM_BOT_TOKEN (and ideally ANTHROPIC_API_KEY), set CITY
 npm start              # then write /chatid in your group, put it into .env, restart
 ```
 
@@ -127,6 +132,7 @@ npm run dry       # poll all sources once and print results, nothing is sent to 
 ```
 src/
   index.ts        entry point: polling loops, commands, menu
+  cities.ts       city profiles: site ids, districts, neighbourhoods
   pipeline.ts     dedup → filters → LLM → score → send
   sources/        olx, lun, domria (HTTP polling), telegram (MTProto push)
   filter.ts       hard filters, keyword features, scoring
@@ -144,10 +150,13 @@ test/             node:test suites and real-data fixtures
 
 ## Status and limitations
 
-A personal project, built for and used during an actual apartment search in Lviv.
+A personal project, built for and used during an actual apartment search in Lviv, then generalised to other cities.
+The card example above is from Lviv.
 
 - OLX currently blocks non-browser clients (HTTP 403 even from residential networks); OLX listings still arrive through Lun
-  with a ~30-minute delay, so `olx` is disabled in the default `SOURCES`.
+  with a ~30-minute delay, so `olx` is disabled in the default `SOURCES`. OLX location ids are known for Lviv only;
+  for other cities set `OLX_REGION_ID` / `OLX_CITY_ID`.
+- Neighbourhood → district tables exist for Lviv; in other cities a missing district is inferred by the LLM from the street.
 - Only new Telegram posts are seen — channel history is not read.
 - The bot's UI language is Ukrainian. Filters and `/help` questions are understood by the LLM in any language; the offline
   fallback parser (used without an API key) understands Ukrainian and Russian only.

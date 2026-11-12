@@ -11,6 +11,15 @@ A single Node.js process (TypeScript executed natively by Node 22) with an SQLit
                  └──────────────────────────────────────┘      SQLite ◄──┘
 ```
 
+## Cities
+
+Everything geography-specific lives in `src/cities.ts`: each city profile holds the location ids for Lun, DIM.RIA
+and OLX, the administrative districts with regular expressions that recognise their Ukrainian, Russian and pre-reform
+spellings ("Суворовський" → "Пересипський" in Odesa), the district people call "the center" and an optional
+neighbourhood → district table. `CITY` selects the profile at startup; source URLs, LLM prompts (the allowed district
+enum, "listings in Kyiv"), district normalisation, the offline filter parser, map links, help texts and examples are all
+derived from it.
+
 ## Sources
 
 Every source maps its own data into one `Listing` shape (`src/types.ts`): price and currency, rooms, area, floor,
@@ -19,9 +28,9 @@ listing and a set of **dedup keys**.
 
 | Source | How | Notes |
 |---|---|---|
-| **OLX** | Internal JSON API used by the site, newest 40 in "long-term rent, Lviv" | Structured pets field, appliances. Phones are hidden. Currently returns 403 to non-browser clients |
+| **OLX** | Internal JSON API used by the site, newest 40 in "long-term rent" for the city | Structured pets field, appliances. Phones are hidden. Currently returns 403 to non-browser clients |
 | **Lun.ua** | Lun's own API | Aggregates Rieltor/OLX/DIM.RIA; gives phones, pets, appliances, shelter info and the **original URL** (used for the card link). ~30 min behind the originals |
-| **DIM.RIA** | Search returns ids; details are fetched **only for unseen ids** | Often gives a neighbourhood instead of a district → mapped via `MICRODISTRICT_TO_DISTRICT` |
+| **DIM.RIA** | Search returns ids; details are fetched **only for unseen ids** | Often gives a neighbourhood instead of a district → mapped via the city's `microdistricts` table |
 | **Telegram** | gramjs (MTProto) logged in as the user, `NewMessage` events for the listed channels | Instant, no polling. Free text only, so the LLM does most of the work |
 
 Polling uses jittered intervals (±20%) and a browser User-Agent. Five consecutive failures of a source trigger a warning

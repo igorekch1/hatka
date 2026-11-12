@@ -1,14 +1,15 @@
+import { CONFIG } from '../config.ts';
 import { parseCurrency } from '../fx.ts';
 import type { Listing, Source } from '../types.ts';
 import { districtFromMicro, getJson, num, sleep } from '../util.ts';
 
 /**
  * DIM.RIA: поиск отдаёт только id, детали — отдельным запросом.
- * state_id=5 / city_id=5 = Львів, operation=3 = довгострокова оренда, realty_type=2 = квартира.
+ * state_id / city_id — город (из профиля CITY), operation=3 = довгострокова оренда, realty_type=2 = квартира.
  * Детали тянем только по новым id, поэтому нагрузка — пара запросов в минуту.
  */
-const SEARCH =
-  'https://dom.ria.com/node/searchEngine/v2/?category=1&realty_type=2&operation=3&state_id=5&city_id=5&sort=created_at&limit=20&page=0&lang_id=4';
+const SEARCH = () =>
+  `https://dom.ria.com/node/searchEngine/v2/?category=1&realty_type=2&operation=3&state_id=${CONFIG.city.domria.stateId}&city_id=${CONFIG.city.domria.cityId}&sort=created_at&limit=20&page=0&lang_id=4`;
 export const DETAILS = (id: string | number) => `https://dom.ria.com/realty/data/${id}?lang_id=4`;
 
 export function mapDomRia(d: any): Listing {
@@ -56,7 +57,7 @@ export function mapDomRia(d: any): Listing {
 export const domriaSource: Source = {
   name: 'domria',
   async poll(isSeen) {
-    const res = await getJson<{ items: number[] }>(SEARCH, { referer: 'https://dom.ria.com/uk/arenda-kvartir/lvov/' });
+    const res = await getJson<{ items: number[] }>(SEARCH(), { referer: 'https://dom.ria.com/uk/' });
     const fresh = (res.items ?? []).filter((id) => !isSeen(`domria:${id}`));
     const out: Listing[] = [];
     for (const id of fresh) {

@@ -46,7 +46,7 @@ export interface Listing {
   area?: number;
   floor?: number;
   floors?: number;
-  /** Административный район Львова: Франківський, Шевченківський, ... */
+  /** Административный район города (канонические названия — из профиля CITY) */
   district?: string;
   microdistrict?: string;
   address?: string;

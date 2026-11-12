@@ -1,5 +1,5 @@
 import { aiEnabled, callClaude, extractJson } from './ai.ts';
-import { ALL_DISTRICTS, EMPTY_FILTERS, FEATURE_LABELS, FILTERS, FILTERS_STATE, NO_PRICE_LIMIT, type Filters } from './config.ts';
+import { ALL_DISTRICTS, CONFIG, EMPTY_FILTERS, FEATURE_LABELS, FILTERS, FILTERS_STATE, NO_PRICE_LIMIT, type Filters } from './config.ts';
 import type { Store } from './db.ts';
 import { toUah, toUsd, uahPerUsdRate } from './fx.ts';
 import type { FeatureKey } from './types.ts';
@@ -128,7 +128,7 @@ export function describeFilters(f: Filters = FILTERS, configured = FILTERS_STATE
 export type FilterUpdate = { filters: Filters; changes: string[]; via: 'ai' | 'basic' };
 
 function filtersPrompt(): string {
-  return `Ти допомагаєш налаштувати фільтри пошуку квартир в оренду у Львові. Користувач пише українською або російською,
+  return `Ти допомагаєш налаштувати фільтри пошуку квартир в оренду ${CONFIG.city.nameIn}. Користувач пише українською або російською,
 списком або вільним текстом. Твоє завдання — оновити поточні фільтри відповідно до його повідомлення.
 
 Правила:
@@ -136,7 +136,7 @@ function filtersPrompt(): string {
 - Чого користувач не згадав — лиши як у поточних. «Без обмеження ціни» = maxPriceUsd ${NO_PRICE_LIMIT}.
 - Якщо надіслав повний перелік вимог — побудуй фільтри заново з нього (чого не згадав — бери з поточних).
 - Ціни переводь у долари США. Курс: 1 USD = ${uahPerUsdRate().toFixed(2)} грн, 1 EUR ≈ 1.08 USD.
-- districts — лише з: ${ALL_DISTRICTS.join(', ')}. «Центр» = Галицький. «Будь-який район» = всі шість.
+- districts — лише з: ${ALL_DISTRICTS.join(', ')}.${CONFIG.city.centerDistrict ? ` «Центр» = ${CONFIG.city.centerDistrict}.` : ''} «Будь-який район» = всі.
 - wishes — «хотілки» з вагою 0.5..3 (3 — дуже важливо, 1 — звичайно, 0.5 — бажано). Ключі: ${FEATURE_KEYS.filter((k) => k !== 'allWhiteInterior').map((k) => `${k} (${FEATURE_LABELS[k]})`).join(', ')}.
 - Якщо щось не вкладається в поля (поверх, «не перший поверх», «новобудова», «балкон», «без комісії», «з меблями» тощо) — допиши це коротко в extra
   (ШІ перевірятиме кожне оголошення на відповідність extra). Якщо користувач просить прибрати такі вимоги — прибери з extra.
@@ -172,7 +172,6 @@ async function parseWithAi(text: string, base: Filters): Promise<FilterUpdate> {
   return { filters, changes, via: 'ai' };
 }
 
-const DISTRICT_WORDS = /франк\S*|шевченк\S*|гал[иі]ц\S*|зал[іе]зни\S*|лича?к\S*|лычак\S*|сих[іоиo]в\S*|центр\S*/gi;
 
 /** Без ИИ понимаем только простое: цена, районы, комнаты, площадь, оценка, собака */
 export function parseFiltersBasic(text: string, base: Filters): FilterUpdate {
@@ -192,7 +191,13 @@ export function parseFiltersBasic(text: string, base: Filters): FilterUpdate {
     }
   }
 
-  const ds = [...t.matchAll(DISTRICT_WORDS)].map((m) => (m[0].startsWith('центр') ? 'Галицький' : normalizeDistrict(m[0]))).filter(Boolean) as string[];
+  // Районы города в порядке упоминания; «центр» — центральный район из профиля
+  const ds = CONFIG.city.districts
+    .map((d) => ({ name: d.name, at: t.search(new RegExp(d.match.source, 'i')) }))
+    .filter((d) => d.at >= 0)
+    .sort((a, b) => a.at - b.at)
+    .map((d) => d.name);
+  if (CONFIG.city.centerDistrict && /(?<![а-яіїєґ])центр/.test(t) && !ds.includes(CONFIG.city.centerDistrict)) ds.push(CONFIG.city.centerDistrict);
   if (/будь-?\s?як\S*\s+район|всі\s+район|все\s+район|любой\s+район/.test(t)) {
     f.districts = [...ALL_DISTRICTS];
     changes.push('райони: всі');

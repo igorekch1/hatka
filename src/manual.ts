@@ -126,7 +126,7 @@ export function findCard(store: Store, chatId: string, url: string): MessageRow 
 export const ADD_HELP = [
   '➕ <b>Додати квартиру, яку знайшли самі</b>',
   'Надішліть у відповідь на це повідомлення посилання (OLX, DIM.RIA, Rieltor, Lun, пост у Telegram…).',
-  'Після посилання можна дописати нотатку: <i>«2к, $800, Франківський, з собакою ок, 0671234567»</i> — це допоможе, якщо сайт не віддасть дані.',
+  `Після посилання можна дописати нотатку: <i>«2к, $800, ${CONFIG.city.districts[0].name}, з собакою ок, 0671234567»</i> — це допоможе, якщо сайт не віддасть дані.`,
 ].join('\n');
 
 export async function addManual(store: Store, bot: Bot, args: string, chatId: string, who: string): Promise<Reply> {

@@ -1,4 +1,4 @@
-import { FEATURE_LABELS, FILTERS, TOP_SCORE } from './config.ts';
+import { CONFIG, FEATURE_LABELS, FILTERS, TOP_SCORE } from './config.ts';
 import type { MessageRow } from './db.ts';
 import { isDreamComplex } from './filter.ts';
 import { toUah } from './fx.ts';
@@ -25,7 +25,7 @@ const SHOWN: FeatureKey[] = [
 export function mapUrl(l: Listing): string | undefined {
   if (l.lat && l.lon) return `https://www.google.com/maps/search/?api=1&query=${l.lat},${l.lon}`;
   const q = [...new Set([l.address, l.complex].filter(Boolean))].join(', ');
-  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${q}, Львів`)}` : undefined;
+  return q ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${q}, ${CONFIG.city.name}`)}` : undefined;
 }
 
 /** ✅ что есть · ❌ каких «хотелок» из фильтров нет или не сказано */

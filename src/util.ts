@@ -1,4 +1,4 @@
-import { CONFIG, FILTERS, MICRODISTRICT_TO_DISTRICT } from './config.ts';
+import { CONFIG, FILTERS } from './config.ts';
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -66,25 +66,17 @@ export function extractPhones(text: string): string[] {
   return [...out];
 }
 
-const DISTRICT_STEMS: Array<[RegExp, string]> = [
-  [/франк[іоиo]в/i, 'Франківський'],
-  [/шевченк[іоиo]в/i, 'Шевченківський'],
-  [/гал[иі]ц/i, 'Галицький'],
-  [/зал[іе]зни[чн]|железнодор/i, 'Залізничний'],
-  [/лича?к[іоиo]в|лычак/i, 'Личаківський'],
-  [/сих[іоиo]в/i, 'Сихівський'],
-];
-
-/** Приводит «Франковский р-н», «Франківський район» → «Франківський» */
+/** Приводит «Франковский р-н», «Франківський район» → «Франківський» (по районам города из CITY) */
 export function normalizeDistrict(raw?: string | null): string | undefined {
   if (!raw) return undefined;
-  for (const [re, name] of DISTRICT_STEMS) if (re.test(raw)) return name;
+  for (const d of CONFIG.city.districts) if (d.match.test(raw)) return d.name;
   return undefined;
 }
 
+/** Микрорайон → район: по таблице города, иначе — вдруг в названии уже есть район («Приморський») */
 export function districtFromMicro(micro?: string | null): string | undefined {
   if (!micro) return undefined;
-  return MICRODISTRICT_TO_DISTRICT[micro.trim().toLowerCase()];
+  return CONFIG.city.microdistricts?.[micro.trim().toLowerCase()] ?? normalizeDistrict(micro);
 }
 
 export function isAllowedDistrict(d?: string): boolean | undefined {
