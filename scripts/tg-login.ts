@@ -10,7 +10,7 @@
  *
  * ⚠️ Строка сессии = полный доступ к аккаунту. Храните её только в .env,
  * никому не отправляйте и не коммитьте в git. Отозвать: Telegram → Настройки →
- * Устройства → завершить сеанс «lviv-flats-radar».
+ * Устройства → завершить сеанс «hatka».
  */
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
@@ -32,7 +32,7 @@ if (!apiId || !apiHash) {
 const { TelegramClient, StringSession, Api } = await loadGramJs();
 const client = new TelegramClient(new StringSession(''), apiId, apiHash, {
   connectionRetries: 5,
-  deviceModel: 'lviv-flats-radar',
+  deviceModel: 'hatka',
 });
 client.setLogLevel?.('error');
 console.log('Подключаюсь к Telegram…');

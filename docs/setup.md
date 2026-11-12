@@ -78,7 +78,7 @@ MTProto (the same protocol Telegram's apps use). The account only reads; it neve
 4. Restart. The start message lists the channels actually being listened to, and warns about any it could not find.
 
 > ⚠️ `TG_SESSION` is full access to your account. Keep it only in `.env` (git-ignored), never share or commit it.
-> Revoke it any time: Telegram → Settings → Devices → terminate the "lviv-flats-radar" session.
+> Revoke it any time: Telegram → Settings → Devices → terminate the "hatka" session.
 
 Only posts published after the bot starts are seen.
 
