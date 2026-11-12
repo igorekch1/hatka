@@ -2,7 +2,7 @@
   "name": "lviv-flats-radar",
   "version": "1.0.0",
   "private": true,
-  "description": "Агрегатор новых объявлений об аренде квартир во Львове с мгновенными уведомлениями в Telegram",
+  "description": "Telegram bot that aggregates long-term rental listings in Lviv (OLX, DIM.RIA, Lun, Telegram channels), filters them with an LLM and posts matches to a group chat",
   "type": "module",
   "engines": {
     "node": ">=22.18"
@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "qrcode-terminal": "^0.12.0",
     "telegram": "^2.26.22"
   },
   "devDependencies": {
