@@ -139,7 +139,9 @@ test('ИИ: разбор ответа и слияние', () => {
 test('Сообщение в Telegram собирается и экранируется', () => {
   const l = keywordFeatures({ ...mapLunCard(fx('lun.json').cards[2]), priceUsd: 850, title: '<script>' });
   const html = renderListing(l, score(l));
-  assert.match(html, /⭐️ <b>2к · 62 м² · \$850<\/b>/);
+  assert.match(html, /⭐️ <a href="[^"]+"><b>2к · 62 м² · \$850<\/b><\/a>/);
+  assert.match(html, /🏢 рієлтор · 📞 \+380671234567/);
+  assert.ok(!html.includes('💬'));
   assert.match(html, /Франківський · ЖК Америка/);
   assert.match(html, /Собака: можна/);
   assert.match(html, /\+380671234567/);

@@ -27,8 +27,8 @@ when is the viewing?
 - **Understands free text with an LLM** (Claude Haiku): extracts price, district (from street or residential complex),
   pets policy, amenities and red flags, and checks custom requirements like "not the ground floor".
 - **Scores** each flat 0–10 against your weighted wish list and marks the best ones as **🔥 TOP**.
-- **Posts a rich card** linking to the *original* listing (not the aggregator), with a Google Maps link and a list of what
-  is present and what still needs to be asked on the phone.
+- **Posts a compact card** whose title links to the *original* listing (not the aggregator), with a Google Maps link and a
+  list of what is present, what is missing and what still needs to be asked on the phone.
 - **Turns the group chat into a lightweight CRM**: ❤️ like, 📞 "I'm calling", 📅 viewing scheduled (with a date parsed from
   "tomorrow at 6 pm"), 🚫 rejected, ❌ not suitable; lists of liked flats, top flats and upcoming viewings.
 - **Is configured in plain language**: `/filters до 900$, Галицький або Франківський, 2 кімнати, обов'язково посудомийка`
@@ -50,9 +50,7 @@ The bot talks Ukrainian to its users:
 ✅ підземний паркінг, посудомийна машина, кондиціонер у спальні, газова плита, душ, світла
 ❌ не вказано: місце під 2 робочі столи
 ⭐ 8.6/10 · 🕐 2 хв тому · Rieltor · знайдено через Lun
-🏢 рієлтор
-📞 +380671234567
-💬 Світла двокімнатна в новому будинку, кухня-вітальня, можна з тваринами
+🏢 рієлтор · 📞 +380671234567
 
 ❤️ Подобається: Олена
 📞 Дзвонить: Андрій

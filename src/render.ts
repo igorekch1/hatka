@@ -1,6 +1,6 @@
 import { CONFIG, FEATURE_LABELS, FILTERS, TOP_SCORE } from './config.ts';
 import type { MessageRow } from './db.ts';
-import { isDreamComplex } from './filter.ts';
+import { canScore, isDreamComplex } from './filter.ts';
 import { toUah } from './fx.ts';
 import type { AiVerdict, FeatureKey, Listing, PetsPolicy } from './types.ts';
 import { ago, escapeHtml as e, formatPhone, siteName } from './util.ts';
@@ -73,7 +73,9 @@ export function renderListing(l: Listing, s: number, ai?: AiVerdict): string {
   if (l.priceUsd !== undefined) head.push(`$${l.priceUsd}`);
   else if (l.price !== undefined) head.push(`${l.price} ${l.currency ?? ''}`.trim());
   const uah = l.currency === 'UAH' && l.price ? `${l.price.toLocaleString('uk-UA')} грн` : l.priceUsd ? `≈${toUah(l.priceUsd).toLocaleString('uk-UA')} грн` : '';
-  lines.push(`${dream ? '⭐️' : '🏠'} <b>${e(head.join(' · ') || 'Квартира')}</b>${uah ? ` (${e(uah)})` : ''}`);
+  // Заголовок — сразу ссылка на объявление (первоисточник)
+  const title = `<b>${e(head.join(' · ') || 'Квартира')}</b>`;
+  lines.push(`${dream ? '⭐️' : '🏠'} ${l.url ? `<a href="${e(l.url)}">${title}</a>` : title}${uah ? ` (${e(uah)})` : ''}`);
 
   const place = [l.district ?? 'район ?', l.complex, l.microdistrict, l.address].filter(Boolean) as string[];
   const floor = l.floor ? ` · ${l.floor}${l.floors ? '/' + l.floors : ''} пов.` : '';
@@ -83,19 +85,20 @@ export function renderListing(l: Listing, s: number, ai?: AiVerdict): string {
   lines.push(...featureLines(l));
   if (ai?.redFlags.length) lines.push(`🚩 ${e(ai.redFlags.join('; '))}`);
 
-  const meta = [`⭐ ${s}/10`, l.publishedAt ? `🕐 ${ago(l.publishedAt)}` : '', sourceLine(l)]
+  const meta = [canScore() ? `⭐ ${s}/10` : '', l.publishedAt ? `🕐 ${ago(l.publishedAt)}` : '', sourceLine(l)]
     .filter(Boolean)
     .join(' · ');
   lines.push(e(meta));
 
-  const who = [l.isOwner === true ? '👤 власник' : l.isOwner === false ? '🏢 рієлтор' : '', l.noCommission ? 'без комісії' : '']
+  // Кто сдаёт и телефон — одной строкой
+  const contact = [
+    l.isOwner === true ? '👤 власник' : l.isOwner === false ? '🏢 рієлтор' : '',
+    l.noCommission ? 'без комісії' : '',
+    l.phones.length ? `📞 ${l.phones.slice(0, 2).map((p) => formatPhone(p)).join(', ')}` : l.source === 'olx' ? '📞 телефон — в оголошенні на OLX' : '',
+  ]
     .filter(Boolean)
     .join(' · ');
-  if (who) lines.push(e(who));
-  if (l.phones.length) lines.push(`📞 ${l.phones.slice(0, 2).map((p) => e(formatPhone(p))).join(', ')}`);
-  else if (l.source === 'olx') lines.push('📞 телефон — в оголошенні на OLX');
-  if (ai?.summary) lines.push(`💬 <i>${e(ai.summary)}</i>`);
-  if (!ai && l.text) lines.push(`💬 <i>${e(l.text.replace(/\s+/g, ' ').slice(0, 220))}…</i>`);
+  if (contact) lines.push(e(contact));
   return lines.join('\n');
 }
 

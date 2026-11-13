@@ -26,15 +26,13 @@ as they appear in the chat, with a translation where useful.
 
 ```
 🔥 ТОП 8.6/10                                   ← only for score ≥ 7
-⭐️ 2к · 62 м² · $850 (≈39 100 грн)              ← ⭐️ = "dream" residential complex
+⭐️ 2к · 62 м² · $850 (≈39 100 грн)              ← title links to the listing; ⭐️ = "dream" complex
 📍 district · complex · address · floor · На карті   ← Google Maps link (coordinates or address)
 🐕 Собака: можна ✅                             ← pets policy
 ✅ amenities that are present
 ❌ wishes that are absent · не вказано: wishes not mentioned (ask on the phone)
-⭐ score · 🕐 age · original site · found via aggregator
-🏢 realtor / 👤 owner · no commission
-📞 phone
-💬 one-line summary by the LLM
+⭐ score · 🕐 age · original site · found via aggregator   ← score hidden if no wishes are set
+🏢 realtor / 👤 owner · no commission · 📞 phone
 ```
 
 The open button always points at the **original** listing: a Lun card that mirrors a Rieltor listing opens Rieltor
@@ -88,8 +86,10 @@ After every change the bot shows what changed and the full filter set, with **�
 **🗑 Очистити** clears the filters and stops notifications. Filters apply to new listings only and survive restarts.
 Whatever you did not mention is unrestricted (no price → any price, no districts → all districts).
 
-Without an Anthropic API key a simple offline parser understands only price, districts, rooms, area, minimum score and
-"with/without a dog".
+Without an Anthropic API key a simple offline parser understands price (max and min), districts, "send without a district",
+rooms, area, minimum score, dog, "small dogs only", "one person only", dream complexes and wishes with weights
+(`підземний паркінг 2, посудомийка 1.5`, `обов'язково душ` = 2, `бажано світла` = 0.5). Extra requirements
+("not the ground floor") need the LLM.
 
 ## Score (0–10)
 
