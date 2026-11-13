@@ -8,7 +8,7 @@ import { EMPTY_FILTERS, FILTERS, FILTERS_STATE } from '../src/config.ts';
 import { SAMPLE_FILTERS, useSampleFilters } from './profile.ts';
 import { Store } from '../src/db.ts';
 import { hardFilter, score } from '../src/filter.ts';
-import { applyFilters, clearFilters, describeFilters, filtersSnapshot, loadFilters, parseFiltersBasic, restoreSnapshot, sanitizeFilters } from '../src/filters.ts';
+import { applyFilters, clearFilters, describeFilters, filtersSnapshot, loadFilters, parseFiltersBasic, parseWishes, restoreSnapshot, sanitizeFilters } from '../src/filters.ts';
 import { Pipeline } from '../src/pipeline.ts';
 import { openLabel } from '../src/bot.ts';
 import { cardTitle, mapUrl, renderLikedList, renderListing, renderStatusLines, renderTopList, renderViewings, sourceLine } from '../src/render.ts';
@@ -284,6 +284,40 @@ test('Оцінка без «хотілок» — 0, а не ТОП', () => {
   try {
     Object.assign(FILTERS, structuredClone(EMPTY_FILTERS));
     assert.equal(score(listing({ features: { allWhiteInterior: false, dishwasher: true } })), 0);
+  } finally {
+    useSampleFilters();
+  }
+});
+
+test('Фільтри без ШІ: хотілки з вагами, ЖК мрії, прапорці (текст з чату)', () => {
+  const text = `до 1000$, мін. ціна 150$
+райони: Франківський, Шевченківський, Галицький; якщо район не вказано — теж надсилати
+з собакою середнього розміру, відсікати «лише маленькі собаки»
+відсікати «лише для однієї особи»
+ЖК мрії: Америка
+бажано (вага): підземний паркінг 2, посудомийна машина 1.5, кондиціонер у спальні 1.5, газова плита 1, душ 1, місце під 2 робочі столи 1, світла 0.5
+мін. оцінка 0`;
+  const f = parseFiltersBasic(text, EMPTY_FILTERS).filters;
+  assert.equal(f.maxPriceUsd, 1000);
+  assert.equal(f.minPriceUsd, 150);
+  assert.deepEqual(f.districts, ['Франківський', 'Шевченківський', 'Галицький']);
+  assert.equal(f.allowUnknownDistrict, true);
+  assert.equal(f.dogFriendly, true);
+  assert.equal(f.rejectSmallDogsOnly, true);
+  assert.equal(f.rejectOnlyOnePerson, true);
+  assert.deepEqual(f.dreamComplexes, ['америка']);
+  assert.deepEqual(f.wishes, SAMPLE_FILTERS.wishes);
+  assert.equal(f.minArea, null, '«мін. ціна 150$» — не площа');
+
+  assert.deepEqual(parseWishes("обов'язково посудомийка і паркінг, бажано світла, без газу"), { dishwasher: 2, parking: 2, bright: 0.5 });
+});
+
+test('Картка без хотілок: оцінка не показується', () => {
+  try {
+    Object.assign(FILTERS, structuredClone(EMPTY_FILTERS));
+    const html = renderListing(listing({ features: { dishwasher: true } }), 0);
+    assert.ok(!html.includes('/10'));
+    assert.ok(!html.includes('❌'));
   } finally {
     useSampleFilters();
   }

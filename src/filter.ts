@@ -115,6 +115,11 @@ export function isDreamComplex(l: Listing): boolean {
   );
 }
 
+/** Есть ли по чему оценивать: «хотелки» или ЖК мечты */
+export function canScore(): boolean {
+  return Object.values(FILTERS.wishes).some((w) => (w ?? 0) > 0) || FILTERS.dreamComplexes.length > 0;
+}
+
 /** Оценка 0..10 по «хотелкам». Неизвестное не штрафуется. */
 export function score(l: Listing): number {
   const w = FILTERS.wishes;

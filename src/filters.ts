@@ -173,7 +173,7 @@ async function parseWithAi(text: string, base: Filters): Promise<FilterUpdate> {
 }
 
 
-/** Без ИИ понимаем только простое: цена, районы, комнаты, площадь, оценка, собака */
+/** Без ИИ: цена, районы, комнаты, площадь, оценка, собака, «хотелки» с весами, ЖК мечты и флаги отсева */
 export function parseFiltersBasic(text: string, base: Filters): FilterUpdate {
   const f = clone(base);
   const changes: string[] = [];
@@ -242,7 +242,81 @@ export function parseFiltersBasic(text: string, base: Filters): FilterUpdate {
     changes.push('з собакою');
   }
 
+  const minPrice = t.match(/мін\S*\.?\s*ціна\s*[:\-]?\s*\$?\s*(\d{2,5})|мин\S*\.?\s*цена\s*[:\-]?\s*\$?\s*(\d{2,5})|(?:ціна|цена)\s+від\s*\$?\s*(\d{2,5})/);
+  if (minPrice) {
+    f.minPriceUsd = Number(minPrice[1] ?? minPrice[2] ?? minPrice[3]);
+    changes.push(`мін. ціна $${f.minPriceUsd}`);
+  }
+
+  if (/(лише|тільки|только)\s+маленьк/.test(t)) {
+    f.rejectSmallDogsOnly = true;
+    changes.push('відсікати «лише маленькі собаки»');
+  }
+  if (/(однієї|одної|одной|одного)\s+(особи|людини|человека|особы)/.test(t)) {
+    f.rejectOnlyOnePerson = true;
+    changes.push('відсікати «лише для однієї особи»');
+  }
+  if (/район\S*\s+не\s+(вказан|указан)\S*[^,.;\n]{0,10}(теж|також|тоже|все\s+одно)\s+(надсил|присыл)/.test(t)) {
+    f.allowUnknownDistrict = true;
+    changes.push('без вказаного району теж надсилати');
+  } else if (/район\S*\s+не\s+(вказан|указан)\S*[^,.;\n]{0,10}не\s+(надсил|присыл)/.test(t)) {
+    f.allowUnknownDistrict = false;
+    changes.push('без вказаного району не надсилати');
+  }
+
+  const dream = t.match(/жк\s+(?:мрії|мечты)\s*[:\-—]?\s*([^,;\n]+)/);
+  if (dream) {
+    f.dreamComplexes = dream[1].split(/\s+(?:і|та|або|и|или)\s+|\//).map((x) => x.replace(/[«»"']/g, '').trim()).filter(Boolean);
+    changes.push(`ЖК мрії: ${f.dreamComplexes.join(', ')}`);
+  }
+
+  // «Хотелки»: в каждой части текста (через запятую/строку) ищем удобства и вес рядом с ними
+  const found = parseWishes(t);
+  if (Object.keys(found).length) {
+    f.wishes = { ...f.wishes, ...found };
+    changes.push(`бажано: ${Object.entries(found).map(([k, w]) => `${FEATURE_LABELS[k as FeatureKey]} ${w}`).join(', ')}`);
+  }
+
   return { filters: sanitizeFilters(f, base), changes, via: 'basic' };
+}
+
+const WISH_PATTERNS: Array<[FeatureKey, RegExp]> = [
+  ['undergroundParking', /підземн\S*\s+паркін|подземн\S*\s+паркин/],
+  ['parking', /паркінг|паркинг|парковк|паркомісц|машиномісц/],
+  ['dishwasher', /посудомий|посудомо/],
+  ['acInBedroom', /кондиц\S*\s+(у|в)\s+спальн/],
+  ['airConditioner', /кондиц/],
+  ['gasStove', /газов\S*\s+(плит|варильн)|газ(?![а-яіїєґ])/],
+  ['shower', /душов|(?<![а-яіїєґ])душ(?![а-яіїєґ])/],
+  ['twoDesks', /(2|два|дві|двох)\s+(робоч|рабоч)|під\s+(2|два)\s+стол|под\s+(2|два)\s+стол|кабінет|кабинет/],
+  ['bright', /світл|светл|сонячн|солнечн/],
+];
+
+/** «підземний паркінг 2, посудомийка (1.5), обов'язково душ» → { undergroundParking: 2, dishwasher: 1.5, shower: 2 } */
+export function parseWishes(t: string): Partial<Record<FeatureKey, number>> {
+  const out: Partial<Record<FeatureKey, number>> = {};
+  for (const part of t.split(/[,;\n]/)) {
+    if (/(?<![а-яіїєґ])без\s/.test(part)) continue;
+    const keys: FeatureKey[] = [];
+    for (const [k, re] of WISH_PATTERNS) {
+      if (!re.test(part)) continue;
+      // Подземный паркинг уже включает «паркинг», кондиционер в спальне — «кондиционер»
+      if (k === 'parking' && keys.includes('undergroundParking')) continue;
+      if (k === 'airConditioner' && keys.includes('acInBedroom')) continue;
+      keys.push(k);
+    }
+    if (!keys.length) continue;
+    const num = part.match(/(?:вага|вес)?\s*[(:—-]?\s*(\d(?:[.,]\d)?)\s*\)?\s*$/)?.[1];
+    const weight = num
+      ? Number(num.replace(',', '.'))
+      : /обов.?язков|обязательн|дуже\s+важлив|очень\s+важн|must/.test(part)
+        ? 2
+        : /бажано|желательно|було\s+б\s+добре/.test(part)
+          ? 0.5
+          : 1;
+    for (const k of keys) out[k] = weight;
+  }
+  return out;
 }
 
 export async function parseFilters(text: string, base: Filters = FILTERS): Promise<FilterUpdate> {
